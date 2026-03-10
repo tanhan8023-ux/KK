@@ -8,6 +8,8 @@ export interface Persona {
   avatarUrl?: string;
   avatarFrame?: string;
   avatarFrameScale?: number;
+  avatarFrameX?: number;
+  avatarFrameY?: number;
   avatarPendant?: string;
   autoReplyEnabled?: boolean;
   autoReplyContent?: string;
@@ -62,6 +64,8 @@ export interface UserProfile {
   avatarUrl?: string;
   avatarFrame?: string;
   avatarFrameScale?: number;
+  avatarFrameX?: number;
+  avatarFrameY?: number;
   avatarPendant?: string;
   autoReplyEnabled?: boolean;
   autoReplyContent?: string;
@@ -98,7 +102,7 @@ export interface ApiSettings {
 
 export interface Widget {
   id: string;
-  type: 'anniversary' | 'image' | 'weather' | 'app';
+  type: 'anniversary' | 'image' | 'weather' | 'app' | string;
   appId?: string; // If type is 'app'
   x: number;
   y: number;

@@ -351,6 +351,44 @@ export function PersonaScreen({ worldbook: initialWorldbook, personas: initialPe
                         />
                       </div>
                     </div>
+                    <div className="grid grid-cols-3 gap-3 mt-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-neutral-400">缩放 ({persona.avatarFrameScale || 1})</label>
+                        <input 
+                          type="range" 
+                          min="0.5" 
+                          max="2" 
+                          step="0.05"
+                          value={persona.avatarFrameScale || 1}
+                          onChange={(e) => handleUpdatePersona(persona.id, 'avatarFrameScale', parseFloat(e.target.value))}
+                          className="w-full accent-blue-500"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-neutral-400">偏移 X ({persona.avatarFrameX || 0})</label>
+                        <input 
+                          type="range" 
+                          min="-50" 
+                          max="50" 
+                          step="1"
+                          value={persona.avatarFrameX || 0}
+                          onChange={(e) => handleUpdatePersona(persona.id, 'avatarFrameX', parseInt(e.target.value))}
+                          className="w-full accent-blue-500"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-neutral-400">偏移 Y ({persona.avatarFrameY || 0})</label>
+                        <input 
+                          type="range" 
+                          min="-50" 
+                          max="50" 
+                          step="1"
+                          value={persona.avatarFrameY || 0}
+                          onChange={(e) => handleUpdatePersona(persona.id, 'avatarFrameY', parseInt(e.target.value))}
+                          className="w-full accent-blue-500"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                 </div>

@@ -355,6 +355,8 @@ export function ChatScreen({
   };
   const [tempAvatarFrame, setTempAvatarFrame] = useState('');
   const [tempAvatarFrameScale, setTempAvatarFrameScale] = useState(1);
+  const [tempAvatarFrameX, setTempAvatarFrameX] = useState(0);
+  const [tempAvatarFrameY, setTempAvatarFrameY] = useState(0);
   const [tempAvatarPendant, setTempAvatarPendant] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1867,6 +1869,8 @@ export function ChatScreen({
               onClick={() => {
                 setTempAvatarFrame(userProfile.avatarFrame || '');
                 setTempAvatarFrameScale(userProfile.avatarFrameScale || 1);
+                setTempAvatarFrameX(userProfile.avatarFrameX || 0);
+                setTempAvatarFrameY(userProfile.avatarFrameY || 0);
                 setShowAvatarFrameModal(true);
               }} 
               className="p-2 text-neutral-800"
@@ -1960,7 +1964,7 @@ export function ChatScreen({
                         src={userProfile.avatarFrame} 
                         className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] object-contain pointer-events-none z-10 select-none"
                         alt="frame"
-                        style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `scale(${userProfile.avatarFrameScale || 1})` }}
+                        style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `translate(${userProfile.avatarFrameX || 0}px, ${userProfile.avatarFrameY || 0}px) scale(${userProfile.avatarFrameScale || 1})` }}
                       />
                     )}
                     {userProfile.avatarPendant && (
@@ -2016,7 +2020,7 @@ export function ChatScreen({
                       src={p.avatarFrame} 
                       className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] object-contain pointer-events-none z-10 select-none"
                       alt="frame"
-                      style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `scale(${p.avatarFrameScale || 1})` }}
+                      style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `translate(${p.avatarFrameX || 0}px, ${p.avatarFrameY || 0}px) scale(${p.avatarFrameScale || 1})` }}
                     />
                   )}
                   {p.avatarPendant && (
@@ -2131,7 +2135,7 @@ export function ChatScreen({
                       src={currentPersona.avatarFrame} 
                       className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] object-contain pointer-events-none z-10 select-none"
                       alt="frame"
-                      style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `scale(${currentPersona.avatarFrameScale || 1})` }}
+                      style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `translate(${currentPersona.avatarFrameX || 0}px, ${currentPersona.avatarFrameY || 0}px) scale(${currentPersona.avatarFrameScale || 1})` }}
                     />
                   )}
                   {currentPersona?.avatarPendant && (
@@ -2502,7 +2506,7 @@ export function ChatScreen({
                           src={userProfile.avatarFrame} 
                           className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] object-contain pointer-events-none z-10 select-none"
                           alt="frame"
-                          style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `scale(${userProfile.avatarFrameScale || 1})` }}
+                          style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `translate(${userProfile.avatarFrameX || 0}px, ${userProfile.avatarFrameY || 0}px) scale(${userProfile.avatarFrameScale || 1})` }}
                         />
                       )}
                       {userProfile.avatarPendant && (
@@ -2795,7 +2799,7 @@ export function ChatScreen({
                       src={userProfile.avatarFrame} 
                       className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] object-contain pointer-events-none z-10 select-none"
                       alt="frame"
-                      style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `scale(${userProfile.avatarFrameScale || 1})` }}
+                      style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `translate(${userProfile.avatarFrameX || 0}px, ${userProfile.avatarFrameY || 0}px) scale(${userProfile.avatarFrameScale || 1})` }}
                     />
                   )}
                   {userProfile.avatarPendant && (
@@ -2831,7 +2835,10 @@ export function ChatScreen({
                           src={isUser ? userProfile.avatarFrame : authorPersona?.avatarFrame} 
                           className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] object-contain pointer-events-none z-10 select-none"
                           alt="frame"
-                          style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `scale(${isUser ? (userProfile.avatarFrameScale || 1) : (authorPersona?.avatarFrameScale || 1)})` }}
+                          style={{ 
+                            filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', 
+                            transform: `translate(${isUser ? (userProfile.avatarFrameX || 0) : (authorPersona?.avatarFrameX || 0)}px, ${isUser ? (userProfile.avatarFrameY || 0) : (authorPersona?.avatarFrameY || 0)}px) scale(${isUser ? (userProfile.avatarFrameScale || 1) : (authorPersona?.avatarFrameScale || 1)})` 
+                          }}
                         />
                       )}
                       {(isUser ? userProfile.avatarPendant : authorPersona?.avatarPendant) && (
@@ -3503,7 +3510,7 @@ export function ChatScreen({
                     src={userProfile.avatarFrame} 
                     className="absolute -inset-2.5 w-[calc(100%+20px)] h-[calc(100%+20px)] object-contain pointer-events-none z-10 select-none"
                     alt="frame"
-                    style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `scale(${userProfile.avatarFrameScale || 1})` }}
+                    style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `translate(${userProfile.avatarFrameX || 0}px, ${userProfile.avatarFrameY || 0}px) scale(${userProfile.avatarFrameScale || 1})` }}
                   />
                 )}
                 {userProfile.avatarPendant && (
@@ -3532,6 +3539,8 @@ export function ChatScreen({
                 onClick={() => {
                   setTempAvatarFrame(userProfile.avatarFrame || '');
                   setTempAvatarFrameScale(userProfile.avatarFrameScale || 1);
+                  setTempAvatarFrameX(userProfile.avatarFrameX || 0);
+                  setTempAvatarFrameY(userProfile.avatarFrameY || 0);
                   setTempAvatarPendant(userProfile.avatarPendant || '');
                   setShowAvatarFrameModal(true);
                 }}
@@ -4324,7 +4333,7 @@ export function ChatScreen({
                         src={tempAvatarFrame} 
                         className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] object-contain pointer-events-none z-10"
                         alt="Frame"
-                        style={{ transform: `scale(${tempAvatarFrameScale})` }}
+                        style={{ transform: `translate(${tempAvatarFrameX}px, ${tempAvatarFrameY}px) scale(${tempAvatarFrameScale})` }}
                       />
                     )}
                     {tempAvatarPendant && (
@@ -4363,6 +4372,39 @@ export function ChatScreen({
                       onChange={(e) => setTempAvatarFrameScale(parseFloat(e.target.value))}
                       className="w-full accent-green-500"
                     />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-sm font-medium text-neutral-700">水平偏移 (X)</label>
+                        <span className="text-xs text-neutral-500">{tempAvatarFrameX}px</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="-50" 
+                        max="50" 
+                        step="1"
+                        value={tempAvatarFrameX}
+                        onChange={(e) => setTempAvatarFrameX(parseInt(e.target.value))}
+                        className="w-full accent-green-500"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-sm font-medium text-neutral-700">垂直偏移 (Y)</label>
+                        <span className="text-xs text-neutral-500">{tempAvatarFrameY}px</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="-50" 
+                        max="50" 
+                        step="1"
+                        value={tempAvatarFrameY}
+                        onChange={(e) => setTempAvatarFrameY(parseInt(e.target.value))}
+                        className="w-full accent-green-500"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -4415,7 +4457,14 @@ export function ChatScreen({
 
                 <button 
                   onClick={() => {
-                    setUserProfile(prev => ({ ...prev, avatarFrame: tempAvatarFrame, avatarFrameScale: tempAvatarFrameScale, avatarPendant: tempAvatarPendant }));
+                    setUserProfile(prev => ({ 
+                      ...prev, 
+                      avatarFrame: tempAvatarFrame, 
+                      avatarFrameScale: tempAvatarFrameScale, 
+                      avatarFrameX: tempAvatarFrameX,
+                      avatarFrameY: tempAvatarFrameY,
+                      avatarPendant: tempAvatarPendant 
+                    }));
                     setShowAvatarFrameModal(false);
                   }}
                   className="w-full py-3 bg-green-500 text-white font-bold rounded-xl active:scale-[0.98] transition-transform"
