@@ -102,7 +102,7 @@ export interface ApiSettings {
 
 export interface Widget {
   id: string;
-  type: 'anniversary' | 'image' | 'weather' | 'app' | string;
+  type: 'anniversary' | 'image' | 'weather' | 'app' | 'dynamic-status' | string;
   appId?: string; // If type is 'app'
   x: number;
   y: number;
@@ -161,6 +161,22 @@ export interface ThemeSettings {
     content?: string;
     color?: string;
   };
+  musicPlayer?: {
+    avatar1?: string;
+    avatar2?: string;
+    title?: string;
+    musicUrl?: string;
+    songName?: string;
+    artist?: string;
+  };
+  profileCard?: {
+    avatar?: string;
+    bgImage?: string;
+    name?: string;
+    signature?: string;
+    date?: string;
+  };
+  dynamicStatusBg?: string;
   notificationSound?: string;
   innerVoiceCss?: string;
   innerVoiceBgColor?: string;

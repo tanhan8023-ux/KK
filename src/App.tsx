@@ -302,6 +302,11 @@ export default function App() {
     timeColor: '#ffffff',
     statusColor: '#ffffff',
     customIcons: {},
+    musicPlayer: {
+      title: '想变成你的随身听...',
+      avatar1: 'https://picsum.photos/seed/avatar1/100/100',
+      avatar2: 'https://picsum.photos/seed/avatar2/100/100'
+    }
   });
 
   const [worldbook, setWorldbook] = useState<WorldbookSettings>({
@@ -1593,6 +1598,14 @@ export default function App() {
                     unreadCount={unreadCount}
                     userProfile={userProfile}
                     setUserProfile={setUserProfile}
+                    songs={songs}
+                    currentSongIndex={currentSongIndex}
+                    isPlaying={isPlaying}
+                    currentTime={currentTime}
+                    duration={duration}
+                    onPlayPause={handlePlayPause}
+                    onNext={handleNextSong}
+                    onPrev={handlePrevSong}
                   />
                 </motion.div>
               )}

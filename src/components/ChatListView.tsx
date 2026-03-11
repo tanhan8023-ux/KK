@@ -67,7 +67,7 @@ export const ChatListView = ({ personas, messages, userProfile, setCurrentChatId
   };
 
   return (
-    <div className="absolute inset-0 overflow-y-auto pb-[80px]">
+    <div className="bg-white">
       {personas.map((p, index) => (
         <Row key={p.id} index={index} style={{}} />
       ))}

@@ -2,9 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageCircle, Book, Music, Hash, HeartPulse, Sprout, Truck, MoreHorizontal, Settings, Lock, Palette, Mic, Image as ImageIcon, PlusCircle, Smile, CloudSun, Heart, Sun, ShoppingBag, Cloud, CloudRain, CloudLightning, CloudSnow, CloudDrizzle, CloudFog, RefreshCw, Utensils, Smartphone, Minus, Plus, LayoutGrid, X, Upload, Type, RefreshCcw, Download } from 'lucide-react';
 import { Responsive, WidthProvider } from 'react-grid-layout/legacy';
 import { motion, AnimatePresence } from 'motion/react';
-import { ThemeSettings, UserProfile } from '../types';
+import { ThemeSettings, UserProfile, Song } from '../types';
 
 const ResponsiveGridLayoutComponent = WidthProvider(Responsive);
+
+import { MusicPlayerWidget } from './MusicPlayerWidget';
+import { ProfileCardWidget } from './ProfileCardWidget';
+import { DynamicStatusWidget } from './DynamicStatusWidget';
 
 interface Props {
   onNavigate: (screen: 'chat' | 'persona' | 'api' | 'theme' | 'music' | 'xhs' | 'treehole' | 'taobao' | 'fooddelivery' | 'bartender' | 'aiphones') => void;
@@ -14,6 +18,15 @@ interface Props {
   unreadCount: number;
   userProfile: UserProfile;
   setUserProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
+  // Music props
+  songs: Song[];
+  currentSongIndex: number;
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  onPlayPause: () => void;
+  onNext: () => void;
+  onPrev: () => void;
 }
 
 interface WeatherData {
@@ -38,29 +51,31 @@ function AppIcon({ id, icon: Icon, label, onClick, onLongPress, onEditIcon, isEd
 
   return (
     <button 
+      className={`flex flex-col items-center gap-1.5 group relative w-full h-full touch-manipulation ${isEditingLayout ? 'animate-pulse' : ''}`}
       onPointerDown={(e) => {
         touchStartTime.current = Date.now();
         touchStartPos.current = { x: e.clientX, y: e.clientY };
         if (onLongPress) {
           longPressTimer.current = setTimeout(() => {
             onLongPress();
-          }, 500);
+          }, 600); // Slightly longer for safety
         }
       }}
-      onPointerUp={(e) => {
+      onPointerUp={() => {
         if (longPressTimer.current) clearTimeout(longPressTimer.current);
-        const dx = Math.abs(e.clientX - touchStartPos.current.x);
-        const dy = Math.abs(e.clientY - touchStartPos.current.y);
-        if (Date.now() - touchStartTime.current < 500 && dx < 10 && dy < 10) {
+      }}
+      onPointerCancel={() => {
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        // Only trigger if it wasn't a long press (approx)
+        if (Date.now() - touchStartTime.current < 500) {
           if (!isEditingLayout) {
             onClick?.();
           }
         }
       }}
-      onPointerCancel={() => {
-        if (longPressTimer.current) clearTimeout(longPressTimer.current);
-      }}
-      className={`flex flex-col items-center gap-1.5 group relative w-full h-full ${isEditingLayout ? 'animate-pulse' : ''}`}
     >
       <div 
         className="w-[52px] h-[52px] backdrop-blur-md rounded-[1.2rem] flex items-center justify-center shadow-sm group-active:scale-95 transition-transform overflow-hidden relative"
@@ -120,13 +135,13 @@ const getWeatherDescription = (code: number) => {
   return "多云";
 };
 
-export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, userProfile, setUserProfile }: Props) {
+export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, userProfile, setUserProfile, songs, currentSongIndex, isPlaying, currentTime, duration, onPlayPause, onNext, onPrev }: Props) {
   const [time, setTime] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(0);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [editingWidget, setEditingWidget] = useState<'anniversary' | 'image' | 'signature' | 'couple-sign' | 'memo' | null>(null);
+  const [editingWidget, setEditingWidget] = useState<'anniversary' | 'image' | 'signature' | 'couple-sign' | 'memo' | 'music-player' | 'profile-card' | 'dynamic-status' | null>(null);
   const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [showAddWidgetModal, setShowAddWidgetModal] = useState(false);
   const [anniversaryTitleInput, setAnniversaryTitleInput] = useState('');
@@ -134,11 +149,16 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
   const [signatureInput, setSignatureInput] = useState('');
   const [coupleSignInput, setCoupleSignInput] = useState({ text1: '', text2: '', color: '' });
   const [memoInput, setMemoInput] = useState({ content: '', color: '' });
+  const [musicPlayerInput, setMusicPlayerInput] = useState({ title: '', avatar1: '', avatar2: '' });
+  const [profileCardInput, setProfileCardInput] = useState({ name: '', signature: '', avatar: '', bgImage: '', date: '' });
+  const [dynamicStatusBgInput, setDynamicStatusBgInput] = useState('');
   const [activeIconId, setActiveIconId] = useState<string | null>(null);
   const [foodRoulette, setFoodRoulette] = useState<{spinning: boolean, result: string | null}>({spinning: false, result: null});
   const imageInputRef = useRef<HTMLInputElement>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const touchStartTime = useRef<number>(0);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   const FOOD_OPTIONS = ['火锅', '烧烤', '麻辣烫', '汉堡', '披萨', '日料', '韩餐', '轻食', '面条', '米线', '饺子', '炒菜', '烤肉', '炸鸡', '螺蛳粉'];
 
@@ -191,6 +211,9 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
     { type: 'food-roulette', label: '今天吃啥', w: 2, h: 2, icon: Utensils },
     { type: 'couple-sign', label: '情侣签', w: 2, h: 2, icon: Heart },
     { type: 'memo', label: '备忘录', w: 2, h: 2, icon: Book },
+    { type: 'music-player', label: '随身听', w: 4, h: 2, icon: Music },
+    { type: 'profile-card', label: '名片', w: 2, h: 2, icon: Smartphone },
+    { type: 'dynamic-status', label: '动态状态', w: 4, h: 2, icon: LayoutGrid },
     { type: 'app-chat', label: '微信', w: 1, h: 1, icon: MessageCircle },
     { type: 'app-persona', label: '世界书', w: 1, h: 1, icon: Book },
     { type: 'app-music', label: '音乐', w: 1, h: 1, icon: Music },
@@ -249,7 +272,8 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
                 { id: 'app-persona', type: 'app-persona', x: 1, y: 3, w: 1, h: 1 },
                 { id: 'app-music', type: 'app-music', x: 2, y: 3, w: 1, h: 1 },
                 { id: 'app-xhs', type: 'app-xhs', x: 3, y: 3, w: 1, h: 1 },
-                { id: 'weather', type: 'weather', x: 0, y: 4, w: 4, h: 2 },
+                { id: 'music-player', type: 'music-player', x: 0, y: 4, w: 4, h: 2 },
+                { id: 'weather', type: 'weather', x: 0, y: 6, w: 4, h: 2 },
               ]
             },
             {
@@ -626,11 +650,24 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
       case 'signature':
         return (
           <div className="w-full h-full relative group">
-            <div 
-              className="absolute inset-0 bg-white/60 backdrop-blur-xl rounded-[1.5rem] p-4 flex flex-col justify-center shadow-sm border border-white/50 overflow-hidden cursor-pointer active:scale-95 transition-transform"
-              onClick={() => {
-                setSignatureInput(userProfile.signature || '今天也要开心呀~');
-                setEditingWidget('signature');
+            <button 
+              className="absolute inset-0 bg-white/60 backdrop-blur-xl rounded-[1.5rem] p-4 flex flex-col justify-center shadow-sm border border-white/50 overflow-hidden cursor-pointer active:scale-95 transition-transform text-left"
+              onPointerDown={(e) => {
+                touchStartTime.current = Date.now();
+                longPressTimer.current = setTimeout(() => setIsEditingLayout(true), 600);
+              }}
+              onPointerUp={() => {
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              }}
+              onPointerCancel={() => {
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (Date.now() - touchStartTime.current < 500) {
+                  setSignatureInput(userProfile.signature || '今天也要开心呀~');
+                  setEditingWidget('signature');
+                }
               }}
             >
               {theme.signature?.bgImage && (
@@ -644,7 +681,7 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
                 </>
               )}
               
-              <div className="relative z-10 flex items-center gap-3">
+              <div className="relative z-10 flex items-center gap-3 pointer-events-none">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-orange-400 flex items-center justify-center shrink-0 shadow-sm overflow-hidden">
                   {theme.signature?.avatar ? (
                     <img src={theme.signature.avatar} alt="avatar" className="w-full h-full object-cover" />
@@ -658,20 +695,35 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
                   </p>
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         );
       case 'food-roulette':
         return (
           <div className="w-full h-full relative group">
-            <div 
+            <button 
               className="absolute inset-0 bg-white/60 backdrop-blur-xl rounded-[2rem] p-4 flex flex-col items-center justify-center shadow-sm border border-white/50 overflow-hidden cursor-pointer active:scale-95 transition-transform"
-              onClick={spinFoodRoulette}
+              onPointerDown={(e) => {
+                touchStartTime.current = Date.now();
+                longPressTimer.current = setTimeout(() => setIsEditingLayout(true), 600);
+              }}
+              onPointerUp={() => {
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              }}
+              onPointerCancel={() => {
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (Date.now() - touchStartTime.current < 500) {
+                  spinFoodRoulette();
+                }
+              }}
             >
               <div className="absolute -right-4 -top-4 w-32 h-32 bg-red-300/20 rounded-full blur-xl"></div>
               <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-orange-300/20 rounded-full blur-xl"></div>
               
-              <div className="relative z-10 flex flex-col items-center gap-2">
+              <div className="relative z-10 flex flex-col items-center gap-2 pointer-events-none">
                 <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-red-400 to-orange-400 flex items-center justify-center shadow-md text-white ${foodRoulette.spinning ? 'animate-spin' : ''}`}>
                   <Utensils size={32} />
                 </div>
@@ -682,7 +734,7 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
                   </p>
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         );
       case 'couple-sign': {
@@ -692,25 +744,38 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
 
         return (
           <div className="w-full h-full relative group">
-            <div 
-              className="absolute inset-0 backdrop-blur-xl rounded-[2rem] p-4 flex flex-col justify-end shadow-sm border overflow-hidden cursor-pointer active:scale-95 transition-transform"
+            <button 
+              className="absolute inset-0 backdrop-blur-xl rounded-[2rem] p-4 flex flex-col justify-end shadow-sm border overflow-hidden cursor-pointer active:scale-95 transition-transform text-left"
               style={{
                 background: `linear-gradient(to bottom right, ${baseColor}22, ${baseColor}44)`,
                 borderColor: `${baseColor}66`
               }}
-              onClick={() => {
-                setCoupleSignInput({
-                  text1: theme.coupleSign?.text1 || 'love over rules',
-                  text2: theme.coupleSign?.text2 || 'To meet is to sig on',
-                  color: baseColor
-                });
-                setEditingWidget('couple-sign');
+              onPointerDown={(e) => {
+                touchStartTime.current = Date.now();
+                longPressTimer.current = setTimeout(() => setIsEditingLayout(true), 600);
+              }}
+              onPointerUp={() => {
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              }}
+              onPointerCancel={() => {
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (Date.now() - touchStartTime.current < 500) {
+                  setCoupleSignInput({
+                    text1: theme.coupleSign?.text1 || 'love over rules',
+                    text2: theme.coupleSign?.text2 || 'To meet is to sig on',
+                    color: baseColor
+                  });
+                  setEditingWidget('couple-sign');
+                }
               }}
             >
               {theme.coupleSign?.bgImage && (
                 <img src={theme.coupleSign.bgImage} alt="background" className="absolute inset-0 w-full h-full object-cover z-0 opacity-40" />
               )}
-              <div className="flex flex-col gap-2 mt-2 relative z-10">
+              <div className="flex flex-col gap-2 mt-2 relative z-10 pointer-events-none w-full">
                 {/* Middle row */}
                 <div 
                   className="rounded-full p-1 pr-4 flex items-center justify-between shadow-sm"
@@ -739,7 +804,7 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
                   </div>
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         );
       }
@@ -750,31 +815,94 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
 
         return (
           <div className="w-full h-full relative group">
-            <div 
-              className="absolute inset-0 backdrop-blur-xl rounded-[2rem] p-4 flex flex-col shadow-sm border overflow-hidden cursor-pointer active:scale-95 transition-transform"
+            <button 
+              className="absolute inset-0 backdrop-blur-xl rounded-[2rem] p-4 flex flex-col shadow-sm border overflow-hidden cursor-pointer active:scale-95 transition-transform text-left"
               style={{
                 backgroundColor: `${baseColor}22`,
                 borderColor: `${baseColor}66`
               }}
-              onClick={() => {
-                setMemoInput({
-                  content: theme.memo?.content || '点击编辑备忘录...',
-                  color: baseColor
-                });
-                setEditingWidget('memo');
+              onPointerDown={(e) => {
+                touchStartTime.current = Date.now();
+                longPressTimer.current = setTimeout(() => setIsEditingLayout(true), 600);
+              }}
+              onPointerUp={() => {
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              }}
+              onPointerCancel={() => {
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (Date.now() - touchStartTime.current < 500) {
+                  setMemoInput({
+                    content: theme.memo?.content || '点击编辑备忘录...',
+                    color: baseColor
+                  });
+                  setEditingWidget('memo');
+                }
               }}
             >
-              <div className="flex items-center gap-2 mb-2 opacity-80" style={{ color: baseColor }}>
+              <div className="flex items-center gap-2 mb-2 opacity-80 pointer-events-none" style={{ color: baseColor }}>
                 <Book size={14} />
                 <span className="text-xs font-bold">备忘录</span>
               </div>
-              <div className="flex-1 overflow-y-auto text-sm font-medium whitespace-pre-wrap leading-relaxed custom-scrollbar text-neutral-800">
+              <div className="flex-1 overflow-y-auto text-sm font-medium whitespace-pre-wrap leading-relaxed custom-scrollbar text-neutral-800 pointer-events-none">
                 {theme.memo?.content || '点击编辑备忘录...'}
               </div>
-            </div>
+            </button>
           </div>
         );
       }
+      case 'music-player':
+        return (
+          <MusicPlayerWidget 
+            theme={theme}
+            currentSong={songs[currentSongIndex]}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            onPlayPause={onPlayPause}
+            onNext={onNext}
+            onPrev={onPrev}
+            onLongPress={() => setIsEditingLayout(true)}
+            onNavigate={() => {
+              setMusicPlayerInput({
+                title: theme.musicPlayer?.title || '想变成你的随身听...',
+                avatar1: theme.musicPlayer?.avatar1 || '',
+                avatar2: theme.musicPlayer?.avatar2 || ''
+              });
+              setEditingWidget('music-player');
+            }}
+          />
+        );
+      case 'profile-card':
+        return (
+          <ProfileCardWidget 
+            theme={theme}
+            onLongPress={() => setIsEditingLayout(true)}
+            onEdit={() => {
+              setProfileCardInput({
+                name: theme.profileCard?.name || '小兔叽萌',
+                signature: theme.profileCard?.signature || '天生我萌必有用·ฅ^•ﻌ•^ฅ·',
+                avatar: theme.profileCard?.avatar || '',
+                bgImage: theme.profileCard?.bgImage || '',
+                date: theme.profileCard?.date || '02-27'
+              });
+              setEditingWidget('profile-card');
+            }}
+          />
+        );
+      case 'dynamic-status':
+        return (
+          <DynamicStatusWidget 
+            onLongPress={() => setIsEditingLayout(true)} 
+            bgImage={theme.dynamicStatusBg}
+            onClick={() => {
+              setDynamicStatusBgInput(theme.dynamicStatusBg || '');
+              setEditingWidget('dynamic-status');
+            }}
+          />
+        );
       case 'app-chat':
         return <div className="w-full h-full flex items-center justify-center"><AppIcon id="chat" icon={MessageCircle} label="微信" onClick={() => onNavigate('chat')} theme={theme} badge={unreadCount} isEditingLayout={isEditingLayout} onLongPress={() => setIsEditingLayout(true)} onEditIcon={() => { setActiveIconId('chat'); iconInputRef.current?.click(); }} /></div>;
       case 'app-persona':
@@ -798,28 +926,23 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
     }
   };
 
-  const bgTouchStartTime = useRef<number>(0);
-  const bgTouchStartPos = useRef<{x: number, y: number}>({x: 0, y: 0});
-  const bgLongPressTimer = useRef<NodeJS.Timeout | null>(null);
-
   return (
     <div 
       className="w-full h-full pt-16 pb-6 flex flex-col overflow-hidden relative"
       onPointerDown={(e) => {
         // Only trigger on the background, not on children
         if (e.target === e.currentTarget) {
-          bgTouchStartTime.current = Date.now();
-          bgTouchStartPos.current = { x: e.clientX, y: e.clientY };
-          bgLongPressTimer.current = setTimeout(() => {
+          touchStartTime.current = Date.now();
+          longPressTimer.current = setTimeout(() => {
             setIsEditingLayout(true);
-          }, 500);
+          }, 600);
         }
       }}
       onPointerUp={(e) => {
-        if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current);
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
       }}
       onPointerCancel={() => {
-        if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current);
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
       }}
     >
       {/* Scrollable Pages Container */}
@@ -849,7 +972,7 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
               className="w-full h-full shrink-0 overflow-y-auto overflow-x-hidden snap-center"
             >
               <ResponsiveGridLayoutComponent
-                className="layout"
+                className="layout relative z-10"
                 isDraggable={isEditingLayout}
                 isResizable={isEditingLayout}
                 draggableCancel=".cancel-drag"
@@ -876,7 +999,10 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
                 }}
               >
                 {page.widgets.map(widget => (
-                  <div key={widget.id} className={isEditingLayout ? "animate-pulse" : ""}>
+                  <div 
+                    key={widget.id} 
+                    className={isEditingLayout ? "animate-pulse" : ""}
+                  >
                     {isEditingLayout && (
                       <button 
                         className="absolute -top-2 -left-2 z-50 w-6 h-6 bg-neutral-200/90 backdrop-blur-md text-neutral-600 rounded-full flex items-center justify-center shadow-sm border border-white/50 active:scale-95 transition-transform cursor-pointer cancel-drag"
@@ -1414,6 +1540,347 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
                       content: memoInput.content,
                       color: memoInput.color
                     }
+                  }));
+                  setEditingWidget(null);
+                }}
+                className="flex-1 py-3 bg-blue-500 text-white font-medium rounded-xl active:scale-95 transition-transform shadow-md shadow-blue-500/30"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Music Player Widget Edit Modal */}
+      {editingWidget === 'music-player' && (
+        <div className="absolute inset-0 bg-black/50 z-[100] flex items-center justify-center p-6" onClick={() => setEditingWidget(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4 text-neutral-800">自定义随身听</h3>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-neutral-600 mb-1">标题</label>
+              <input 
+                type="text"
+                value={musicPlayerInput.title}
+                onChange={(e) => setMusicPlayerInput(prev => ({ ...prev, title: e.target.value }))}
+                className="w-full border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                placeholder="想变成你的随身听..."
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-neutral-600 mb-1">左侧头像</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  value={musicPlayerInput.avatar1}
+                  onChange={(e) => setMusicPlayerInput(prev => ({ ...prev, avatar1: e.target.value }))}
+                  className="flex-1 border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-sm"
+                  placeholder="头像 URL..."
+                />
+                <button 
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e: any) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          if (event.target?.result) {
+                            setMusicPlayerInput(prev => ({ ...prev, avatar1: event.target?.result as string }));
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    };
+                    input.click();
+                  }}
+                  className="px-4 bg-neutral-100 text-neutral-700 rounded-xl active:scale-95 transition-transform flex items-center justify-center"
+                  title="本地上传"
+                >
+                  <Upload size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-neutral-600 mb-1">右侧头像</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  value={musicPlayerInput.avatar2}
+                  onChange={(e) => setMusicPlayerInput(prev => ({ ...prev, avatar2: e.target.value }))}
+                  className="flex-1 border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-sm"
+                  placeholder="头像 URL..."
+                />
+                <button 
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e: any) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          if (event.target?.result) {
+                            setMusicPlayerInput(prev => ({ ...prev, avatar2: event.target?.result as string }));
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    };
+                    input.click();
+                  }}
+                  className="px-4 bg-neutral-100 text-neutral-700 rounded-xl active:scale-95 transition-transform flex items-center justify-center"
+                  title="本地上传"
+                >
+                  <Upload size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => {
+                  setTheme(prev => ({
+                    ...prev,
+                    musicPlayer: {
+                      ...prev.musicPlayer,
+                      title: musicPlayerInput.title,
+                      avatar1: musicPlayerInput.avatar1,
+                      avatar2: musicPlayerInput.avatar2
+                    }
+                  }));
+                  setEditingWidget(null);
+                }} 
+                className="w-full py-3 bg-blue-500 text-white font-medium rounded-xl active:scale-95 transition-transform shadow-md shadow-blue-500/20"
+              >
+                保存修改
+              </button>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setEditingWidget(null)} 
+                  className="flex-1 py-3 bg-neutral-100 text-neutral-700 font-medium rounded-xl active:scale-95 transition-transform"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={() => {
+                    setEditingWidget(null);
+                    onNavigate('music');
+                  }} 
+                  className="flex-1 py-3 bg-pink-50 text-pink-500 font-medium rounded-xl active:scale-95 transition-transform border border-pink-100"
+                >
+                  进入播放器
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Card Widget Edit Modal */}
+      {editingWidget === 'profile-card' && (
+        <div className="absolute inset-0 bg-black/50 z-[100] flex items-center justify-center p-6" onClick={() => setEditingWidget(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4 text-neutral-800">自定义名片</h3>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-neutral-600 mb-1">名字</label>
+              <input 
+                type="text"
+                value={profileCardInput.name}
+                onChange={(e) => setProfileCardInput(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                placeholder="小兔叽萌"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-neutral-600 mb-1">签名</label>
+              <input 
+                type="text"
+                value={profileCardInput.signature}
+                onChange={(e) => setProfileCardInput(prev => ({ ...prev, signature: e.target.value }))}
+                className="w-full border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                placeholder="天生我萌必有用..."
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-neutral-600 mb-1">日期</label>
+              <input 
+                type="text"
+                value={profileCardInput.date}
+                onChange={(e) => setProfileCardInput(prev => ({ ...prev, date: e.target.value }))}
+                className="w-full border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                placeholder="02-27"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-neutral-600 mb-1">头像</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  value={profileCardInput.avatar}
+                  onChange={(e) => setProfileCardInput(prev => ({ ...prev, avatar: e.target.value }))}
+                  className="flex-1 border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-sm"
+                  placeholder="头像 URL..."
+                />
+                <button 
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e: any) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          if (event.target?.result) {
+                            setProfileCardInput(prev => ({ ...prev, avatar: event.target?.result as string }));
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    };
+                    input.click();
+                  }}
+                  className="px-4 bg-neutral-100 text-neutral-700 rounded-xl active:scale-95 transition-transform flex items-center justify-center"
+                  title="本地上传"
+                >
+                  <Upload size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-neutral-600 mb-1">背景图</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  value={profileCardInput.bgImage}
+                  onChange={(e) => setProfileCardInput(prev => ({ ...prev, bgImage: e.target.value }))}
+                  className="flex-1 border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-sm"
+                  placeholder="背景图 URL..."
+                />
+                <button 
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e: any) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          if (event.target?.result) {
+                            setProfileCardInput(prev => ({ ...prev, bgImage: event.target?.result as string }));
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    };
+                    input.click();
+                  }}
+                  className="px-4 bg-neutral-100 text-neutral-700 rounded-xl active:scale-95 transition-transform flex items-center justify-center"
+                  title="本地上传"
+                >
+                  <Upload size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setEditingWidget(null)} 
+                className="flex-1 py-3 bg-neutral-100 text-neutral-700 font-medium rounded-xl active:scale-95 transition-transform"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => {
+                  setTheme(prev => ({
+                    ...prev,
+                    profileCard: {
+                      name: profileCardInput.name,
+                      signature: profileCardInput.signature,
+                      avatar: profileCardInput.avatar,
+                      bgImage: profileCardInput.bgImage,
+                      date: profileCardInput.date
+                    }
+                  }));
+                  setEditingWidget(null);
+                }}
+                className="flex-1 py-3 bg-blue-500 text-white font-medium rounded-xl active:scale-95 transition-transform shadow-md shadow-blue-500/30"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Status Widget Edit Modal */}
+      {editingWidget === 'dynamic-status' && (
+        <div className="absolute inset-0 bg-black/50 z-[100] flex items-center justify-center p-6" onClick={() => setEditingWidget(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4 text-neutral-800">自定义状态背景</h3>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-neutral-600 mb-1">背景图片</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  value={dynamicStatusBgInput}
+                  onChange={(e) => setDynamicStatusBgInput(e.target.value)}
+                  className="flex-1 border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-sm"
+                  placeholder="图片 URL..."
+                />
+                <button 
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e: any) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          if (event.target?.result) {
+                            setDynamicStatusBgInput(event.target?.result as string);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    };
+                    input.click();
+                  }}
+                  className="px-4 bg-neutral-100 text-neutral-700 rounded-xl active:scale-95 transition-transform flex items-center justify-center"
+                  title="本地上传"
+                >
+                  <Upload size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setEditingWidget(null)} 
+                className="flex-1 py-3 bg-neutral-100 text-neutral-700 font-medium rounded-xl active:scale-95 transition-transform"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => {
+                  setTheme(prev => ({
+                    ...prev,
+                    dynamicStatusBg: dynamicStatusBgInput
                   }));
                   setEditingWidget(null);
                 }}

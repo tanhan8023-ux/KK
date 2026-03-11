@@ -446,7 +446,7 @@ export function BartenderGame({ onBack, apiSettings, personas, messages, setMess
   if (!selectedPersonaId) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-200 z-[100] flex flex-col">
-        <div className="h-14 flex items-center px-4 border-b border-white/10 shrink-0 bg-white/5 backdrop-blur-md">
+        <div className="pt-12 pb-2 flex items-center px-4 border-b border-white/10 shrink-0 bg-white/5 backdrop-blur-md">
           <button onClick={onBack} className="p-2 -ml-2 text-slate-400 hover:text-white transition-colors">
             <ChevronLeft size={24} />
           </button>

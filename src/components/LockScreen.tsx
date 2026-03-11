@@ -112,10 +112,10 @@ export function LockScreen({ onUnlock, theme, notification, personas }: Props) {
       <div className="mt-auto flex flex-col items-center gap-4">
         <div className="relative">
           <motion.button
-            onClick={handleFingerprintClick}
+            onPointerDown={handleFingerprintClick}
             className={`w-20 h-20 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
               isScanning ? 'border-blue-400 bg-blue-400/20' : scanComplete ? 'border-green-400 bg-green-400/20' : 'border-white/50 bg-white/10'
-            } backdrop-blur-md shadow-lg`}
+            } backdrop-blur-md shadow-lg active:scale-90`}
             animate={isScanning ? { scale: 1.1 } : { scale: 1 }}
           >
             <Fingerprint size={40} className={`${isScanning ? 'text-blue-400' : scanComplete ? 'text-green-400' : 'text-white'} transition-colors`} />

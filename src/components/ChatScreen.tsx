@@ -1927,7 +1927,7 @@ export function ChatScreen({
       <div className="flex-1 overflow-hidden relative">
         {/* Chat List View */}
         {activeTab === 'chat' && !currentChatId && (
-          <div className="absolute inset-0 bg-white">
+          <div className="absolute inset-0 bg-white overflow-y-auto pb-[80px]">
             <ChatListView 
               personas={personas}
               messages={messages}
@@ -2125,27 +2125,28 @@ export function ChatScreen({
                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} relative`}>
                   {msg.role === 'model' && (
                     <div className="relative mr-3 shrink-0 cursor-pointer active:scale-95 transition-transform" onClick={() => handleAvatarClick(msg)} onDoubleClick={() => handlePat('model')}>
-                  <img 
-                    src={currentPersona?.avatarUrl || defaultAiAvatar} 
-                    className="w-10 h-10 rounded-lg object-cover" 
-                    alt="avatar" 
-                  />
-                  {currentPersona?.avatarFrame && (
-                    <img 
-                      src={currentPersona.avatarFrame} 
-                      className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] object-contain pointer-events-none z-10 select-none"
-                      alt="frame"
-                      style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `translate(${currentPersona.avatarFrameX || 0}px, ${currentPersona.avatarFrameY || 0}px) scale(${currentPersona.avatarFrameScale || 1})` }}
-                    />
-                  )}
-                  {currentPersona?.avatarPendant && (
-                    <img 
-                      src={currentPersona.avatarPendant} 
-                      className="absolute -top-1 -right-1 w-5 h-5 object-contain pointer-events-none z-20 select-none"
-                      alt="pendant"
-                    />
-                  )}
+                    <div className="relative w-10 h-10 shrink-0">
+                      <img 
+                        src={currentPersona?.avatarUrl || defaultAiAvatar} 
+                        className="w-10 h-10 rounded-lg object-cover" 
+                        alt="avatar" 
+                      />
+                      {currentPersona?.avatarFrame && (
+                        <img 
+                          src={currentPersona.avatarFrame} 
+                          className="absolute -top-2 -left-2 w-14 h-14 pointer-events-none z-10 select-none"
+                          alt="frame"
+                        />
+                      )}
+                      {currentPersona?.avatarPendant && (
+                        <img 
+                          src={currentPersona.avatarPendant} 
+                          className="absolute -top-1 -right-1 w-5 h-5 object-contain pointer-events-none z-20 select-none"
+                          alt="pendant"
+                        />
+                      )}
                     </div>
+                  </div>
                   )}
                   
                   {msg.role === 'user' && (
@@ -2828,7 +2829,15 @@ export function ChatScreen({
 
                 return (
                   <div key={moment.id} className="flex gap-3">
-                    <div className="relative shrink-0">
+                    <div 
+                      className="relative shrink-0 cursor-pointer active:opacity-70 transition-opacity"
+                      onClick={() => {
+                        if (!isUser && authorPersona) {
+                          setCurrentChatId(authorPersona.id);
+                          setActiveTab('chat');
+                        }
+                      }}
+                    >
                       <img src={authorAvatar} className="w-10 h-10 rounded-lg object-cover" alt="Avatar" />
                       {(isUser ? userProfile.avatarFrame : authorPersona?.avatarFrame) && (
                         <img 
@@ -2850,7 +2859,17 @@ export function ChatScreen({
                       )}
                     </div>
                     <div className="flex-1 border-b border-neutral-100 pb-4">
-                      <h3 className="font-semibold text-[#576b95] text-[16px]">{authorName}</h3>
+                      <h3 
+                        className="font-semibold text-[#576b95] text-[16px] cursor-pointer active:opacity-70 transition-opacity inline-block"
+                        onClick={() => {
+                          if (!isUser && authorPersona) {
+                            setCurrentChatId(authorPersona.id);
+                            setActiveTab('chat');
+                          }
+                        }}
+                      >
+                        {authorName}
+                      </h3>
                       <p className="text-[15px] text-neutral-800 mt-1 leading-relaxed">{renderTextWithStickers(moment.text)}</p>
                       
                       {moment.imageUrl && (
