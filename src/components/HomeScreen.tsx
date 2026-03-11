@@ -9,6 +9,7 @@ const ResponsiveGridLayoutComponent = WidthProvider(Responsive);
 import { MusicPlayerWidget } from './MusicPlayerWidget';
 import { ProfileCardWidget } from './ProfileCardWidget';
 import { DynamicStatusWidget } from './DynamicStatusWidget';
+import { LoveWidget } from './LoveWidget';
 
 interface Props {
   onNavigate: (screen: 'chat' | 'persona' | 'api' | 'theme' | 'music' | 'xhs' | 'treehole' | 'taobao' | 'fooddelivery' | 'bartender' | 'aiphones') => void;
@@ -141,7 +142,7 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [editingWidget, setEditingWidget] = useState<'anniversary' | 'image' | 'signature' | 'couple-sign' | 'memo' | 'music-player' | 'profile-card' | 'dynamic-status' | null>(null);
+  const [editingWidget, setEditingWidget] = useState<'anniversary' | 'image' | 'signature' | 'couple-sign' | 'memo' | 'music-player' | 'profile-card' | 'dynamic-status' | 'love-widget' | null>(null);
   const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [showAddWidgetModal, setShowAddWidgetModal] = useState(false);
   const [anniversaryTitleInput, setAnniversaryTitleInput] = useState('');
@@ -152,6 +153,7 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
   const [musicPlayerInput, setMusicPlayerInput] = useState({ title: '', avatar1: '', avatar2: '' });
   const [profileCardInput, setProfileCardInput] = useState({ name: '', signature: '', avatar: '', bgImage: '', date: '' });
   const [dynamicStatusBgInput, setDynamicStatusBgInput] = useState('');
+  const [loveWidgetInput, setLoveWidgetInput] = useState({ avatar1: '', avatar2: '', bgImage: '', name1: '', name2: '', bottomMessage: '', startDate: '' });
   const [activeIconId, setActiveIconId] = useState<string | null>(null);
   const [foodRoulette, setFoodRoulette] = useState<{spinning: boolean, result: string | null}>({spinning: false, result: null});
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -223,6 +225,7 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
     { type: 'app-fooddelivery', label: '外卖', w: 1, h: 1, icon: Utensils },
     { type: 'app-bartender', label: '调酒师', w: 1, h: 1, icon: Heart },
     { type: 'app-aiphones', label: 'AI分身', w: 1, h: 1, icon: Smartphone },
+    { type: 'love-widget', label: '恋爱组件', w: 4, h: 2, icon: Heart },
   ];
 
   const addWidget = (widgetTemplate: any) => {
@@ -902,6 +905,31 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
               setEditingWidget('dynamic-status');
             }}
           />
+        );
+      case 'love-widget':
+        return (
+          <div className="w-full h-full cursor-pointer" onClick={() => {
+            setLoveWidgetInput({
+              avatar1: theme.loveWidget?.avatar1 || 'https://picsum.photos/seed/avatar1/100/100',
+              avatar2: theme.loveWidget?.avatar2 || 'https://picsum.photos/seed/avatar2/100/100',
+              bgImage: theme.loveWidget?.bgImage || 'https://picsum.photos/seed/bg/800/600?blur=4',
+              name1: theme.loveWidget?.name1 || '小乖',
+              name2: theme.loveWidget?.name2 || '小宝',
+              bottomMessage: theme.loveWidget?.bottomMessage || '请靠近我和我的心',
+              startDate: theme.loveWidget?.startDate || new Date().toISOString().split('T')[0]
+            });
+            setEditingWidget('love-widget');
+          }}>
+            <LoveWidget 
+              avatar1={theme.loveWidget?.avatar1 || 'https://picsum.photos/seed/avatar1/100/100'}
+              avatar2={theme.loveWidget?.avatar2 || 'https://picsum.photos/seed/avatar2/100/100'}
+              backgroundImage={theme.loveWidget?.bgImage || 'https://picsum.photos/seed/bg/800/600?blur=4'}
+              name1={theme.loveWidget?.name1 || '小乖'}
+              name2={theme.loveWidget?.name2 || '小宝'}
+              startDate={theme.loveWidget?.startDate || new Date().toISOString().split('T')[0]}
+              bottomMessage={theme.loveWidget?.bottomMessage || '请靠近我和我的心'}
+            />
+          </div>
         );
       case 'app-chat':
         return <div className="w-full h-full flex items-center justify-center"><AppIcon id="chat" icon={MessageCircle} label="微信" onClick={() => onNavigate('chat')} theme={theme} badge={unreadCount} isEditingLayout={isEditingLayout} onLongPress={() => setIsEditingLayout(true)} onEditIcon={() => { setActiveIconId('chat'); iconInputRef.current?.click(); }} /></div>;
@@ -1814,6 +1842,86 @@ export function HomeScreen({ onNavigate, onLock, theme, setTheme, unreadCount, u
                       bgImage: profileCardInput.bgImage,
                       date: profileCardInput.date
                     }
+                  }));
+                  setEditingWidget(null);
+                }}
+                className="flex-1 py-3 bg-blue-500 text-white font-medium rounded-xl active:scale-95 transition-transform shadow-md shadow-blue-500/30"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Love Widget Edit Modal */}
+      {editingWidget === 'love-widget' && (
+        <div className="absolute inset-0 bg-black/50 z-[100] flex items-center justify-center p-6" onClick={() => setEditingWidget(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4 text-neutral-800">自定义恋爱组件</h3>
+            
+            {['name1', 'name2', 'bottomMessage', 'startDate'].map((field) => (
+              <div key={field} className="mb-4">
+                <label className="block text-sm font-medium text-neutral-600 mb-1">{field === 'name1' ? '名字1' : field === 'name2' ? '名字2' : field === 'startDate' ? '开始日期' : '底部消息'}</label>
+                <input 
+                  type={field === 'startDate' ? 'date' : 'text'}
+                  value={loveWidgetInput[field as keyof typeof loveWidgetInput]}
+                  onChange={(e) => setLoveWidgetInput(prev => ({ ...prev, [field]: e.target.value }))}
+                  className="w-full border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                />
+              </div>
+            ))}
+
+            {['avatar1', 'avatar2', 'bgImage'].map((field) => (
+              <div key={field} className="mb-4">
+                <label className="block text-sm font-medium text-neutral-600 mb-1">{field === 'avatar1' ? '头像1' : field === 'avatar2' ? '头像2' : '背景图'}</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    value={loveWidgetInput[field as keyof typeof loveWidgetInput]}
+                    onChange={(e) => setLoveWidgetInput(prev => ({ ...prev, [field]: e.target.value }))}
+                    className="flex-1 border border-neutral-300 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-sm"
+                  />
+                  <button 
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            if (event.target?.result) {
+                              setLoveWidgetInput(prev => ({ ...prev, [field]: event.target?.result as string }));
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      };
+                      input.click();
+                    }}
+                    className="px-4 bg-neutral-100 text-neutral-700 rounded-xl active:scale-95 transition-transform flex items-center justify-center"
+                    title="本地上传"
+                  >
+                    <Upload size={18} />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setEditingWidget(null)} 
+                className="flex-1 py-3 bg-neutral-100 text-neutral-700 font-medium rounded-xl active:scale-95 transition-transform"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => {
+                  setTheme(prev => ({
+                    ...prev,
+                    loveWidget: loveWidgetInput
                   }));
                   setEditingWidget(null);
                 }}

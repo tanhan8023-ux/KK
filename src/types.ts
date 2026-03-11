@@ -153,6 +153,15 @@ export interface ThemeSettings {
     bgImage?: string;
     color?: string;
   };
+  loveWidget?: {
+    avatar1?: string;
+    avatar2?: string;
+    name1?: string;
+    name2?: string;
+    bgImage?: string;
+    bottomMessage?: string;
+    startDate?: string;
+  };
   signature?: {
     avatar?: string;
     bgImage?: string;
@@ -376,7 +385,7 @@ export interface Order {
   orderFor?: string; // 'me' or personaId
 }
 
-export type Screen = 'home' | 'chat' | 'persona' | 'api' | 'theme' | 'music' | 'xhs' | 'wallet' | 'treehole' | 'taobao' | 'fooddelivery' | 'bartender' | 'aiphones';
+export type Screen = 'home' | 'chat' | 'persona' | 'api' | 'theme' | 'music' | 'xhs' | 'wallet' | 'treehole' | 'taobao' | 'fooddelivery' | 'bartender' | 'aiphones' | 'lovewidget';
 
 
 
