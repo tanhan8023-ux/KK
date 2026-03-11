@@ -684,6 +684,7 @@ export function ChatScreen({
                 amount: part.amount,
                 transferNote: part.transferNote,
                 transferStatus: (part.msgType === 'transfer' && !part.isRefund && !part.isReceived) ? 'pending' : undefined,
+                checkPhoneStatus: part.msgType === 'checkPhoneRequest' ? 'pending' : undefined,
                 relativeCard: part.relativeCard,
                 sticker: part.sticker,
                 isRequest: part.isRequest,
@@ -763,16 +764,21 @@ export function ChatScreen({
     const orderRegex = /[\[［【\(\{]\s*ORDER[:：]?\s*([^\]］】\)\}]+)\s*[\]］】\)\}]/i;
     const stickerRegex = /[\[［【\(\{]\s*STICKER[:：]?\s*([^\]］】\)\}]+)\s*[\]］】\)\}]/i;
     const musicRegex = /[\[［【\(\{]\s*MUSIC[:：]?\s*([^\]］】\)\}]+)\s*[\]］】\)\}]/i;
+    const recallRegex = /[\[［【\(\{]\s*RECALL\s*[\]］】\)\}]/i;
+    const checkPhoneRegex = /[\[［【\(\{]\s*ACTION[:：]?\s*CHECK_PHONE\s*[\]］】\)\}]/i;
+    const imageRegex = /[\[［【\(\{]\s*ACTION[:：]?\s*IMAGE[:：]?\s*([^\]］】\)\}]+)[\]］】\)\}]/i;
     const quoteRegex = /[\[［]QUOTE[:：]\s*([^\]］]+)[\]］]/i;
     const innerVoiceRegex = /[（\(](.*?)[）\)]/g;
 
     // Split text by any of these tags, keeping the tags in the result
-    const allTagsRegex = /([\[［【\(\{]\s*(?:TRANSFER|REQUEST|REFUND|RELATIVE_CARD|ORDER|STICKER|MUSIC|QUOTE)[:：]?[^\]］】\)\}]+[\]］】\)\}]|\|\|\|)/gi;
+    const allTagsRegex = /([\[［【\(\{]\s*(?:TRANSFER|REQUEST|REFUND|RELATIVE_CARD|ORDER|STICKER|MUSIC|RECALL|QUOTE|ACTION[:：]?\s*CHECK_PHONE|ACTION[:：]?\s*IMAGE)[:：]?[^\]］】\)\}]+[\]］】\)\}]|\|\|\|)/gi;
     
     const rawParts = text.split(allTagsRegex).filter(p => p && p.trim() !== '|||');
     const processedParts: any[] = [];
     let currentQuotedId = aiQuotedId;
     let orderItems: string[] = [];
+    let shouldRecall = false;
+    let checkPhoneRequest = false;
 
     const parseAmountAndNote = (content: string) => {
       const parts = content.split(/[,，、]/);
@@ -817,6 +823,14 @@ export function ChatScreen({
       } else if (trimmedPart.match(musicRegex)) {
         const match = trimmedPart.match(musicRegex)!;
         processedParts.push({ msgType: 'text', text: `[播放音乐: ${match[1]}]` });
+      } else if (trimmedPart.match(recallRegex)) {
+        shouldRecall = true;
+      } else if (trimmedPart.match(checkPhoneRegex)) {
+        processedParts.push({ msgType: 'checkPhoneRequest', text: '[请求查看你的手机]', checkPhoneStatus: 'pending' });
+      } else if (trimmedPart.match(imageRegex)) {
+        const match = trimmedPart.match(imageRegex)!;
+        const imageUrl = match[1].trim();
+        processedParts.push({ msgType: 'sticker', sticker: imageUrl });
       } else if (trimmedPart.match(quoteRegex)) {
         const match = trimmedPart.match(quoteRegex)!;
         currentQuotedId = match[1].trim();
@@ -835,7 +849,7 @@ export function ChatScreen({
       processedParts.push({ msgType: 'text', text: '...' });
     }
 
-    return { parts: processedParts, quotedMessageId: currentQuotedId, orderItems };
+    return { parts: processedParts, quotedMessageId: currentQuotedId, orderItems, shouldRecall, checkPhoneRequest };
   };
 
   const handleBacktrack = () => {
@@ -865,7 +879,7 @@ export function ChatScreen({
     });
   };
 
-  const handleSend = async (text: string, msgType: 'text' | 'transfer' | 'relativeCard' | 'sticker' | 'listenTogether' = 'text', amount?: number, transferNote?: string, relativeCard?: { limit: number; status: 'active' | 'cancelled' }, sticker?: string, theaterId?: string) => {
+  const handleSend = async (text: string, msgType: 'text' | 'transfer' | 'relativeCard' | 'sticker' | 'listenTogether' | 'system' = 'text', amount?: number, transferNote?: string, relativeCard?: { limit: number; status: 'active' | 'cancelled' }, sticker?: string, theaterId?: string) => {
     if ((!text.trim() && msgType === 'text') || !currentPersona) return;
 
     // Prevent double sending
@@ -1112,6 +1126,7 @@ export function ChatScreen({
             amount: part.amount,
             transferNote: part.transferNote,
             transferStatus: (part.msgType === 'transfer' && !part.isRefund && !part.isReceived) ? 'pending' : undefined,
+            checkPhoneStatus: part.msgType === 'checkPhoneRequest' ? 'pending' : undefined,
             relativeCard: part.relativeCard,
             sticker: part.sticker,
             isRequest: part.isRequest,
@@ -1143,41 +1158,48 @@ export function ChatScreen({
           }
         }
 
-        if (Math.random() < 0.05 && lastAiMsgId) {
+        if ((processed.shouldRecall || Math.random() < 0.05) && lastAiMsgId) {
+            const recallDelay = processed.shouldRecall ? 1000 : (2000 + Math.random() * 2000);
             setTimeout(async () => {
-              setMessages(prev => prev.map(m => m.id === lastAiMsgId ? { ...m, isRecalled: true } : m));
-              pendingRequests.current += 1;
-              setIsTyping(pendingRequests.current > 0);
-              
-              try {
-                const currentLatestMessages = messagesRef.current.filter(m => m.personaId === currentPersona.id).slice(-200);
-                const recallPrompt = `[系统提示：你（AI角色）刚才撤回了你发出的上一条消息。请发一条新消息，可以解释一下为什么撤回（比如打错字了、发错表情了等），然后继续聊天。]`;
-                const recallContext = currentLatestMessages.map(m => ({
-                  role: m.role === 'model' ? 'assistant' : 'user',
-                  content: `[ID: ${m.id}] ${m.id === lastAiMsgId ? '[此消息已撤回]' : (m.isRecalled ? '[此消息已撤回]' : m.text)}`
-                }));
-                const aiResponse = await fetchAiResponse(recallPrompt, recallContext, currentPersona, apiSettings, worldbook, userProfile, aiRef);
-                const cleanedRecallResponse = aiResponse.responseText.replace(/\[ID:\s*[^\]]+\]/gi, '').trim();
-                
-                const newAiMsg: Message = { 
-                  id: (Date.now() + 2).toString(), 
-                  personaId: currentPersona.id,
-                  role: 'model', 
-                  text: cleanedRecallResponse,
-                  msgType: 'text',
-                  timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                  isRead: true,
-                  createdAt: Date.now(),
-                  theaterId
-                };
-                setMessages(prev => [...prev, newAiMsg]);
-              } catch (e) {
-                console.error("AI recall error:", e);
-              } finally {
-                pendingRequests.current = Math.max(0, pendingRequests.current - 1);
+              const msgToRecall = messagesRef.current.find(m => m.id === lastAiMsgId);
+              if (msgToRecall && (Date.now() - (msgToRecall.createdAt || Date.now()) < 120000)) {
+                setMessages(prev => prev.map(m => m.id === lastAiMsgId ? { ...m, isRecalled: true } : m));
+                pendingRequests.current += 1;
                 setIsTyping(pendingRequests.current > 0);
+                
+                try {
+                  const currentLatestMessages = messagesRef.current.filter(m => m.personaId === currentPersona.id).slice(-200);
+                  const recallPrompt = processed.shouldRecall 
+                    ? `[系统提示：你（AI角色）刚才撤回了你发出的上一条消息。请发一条新消息，可以解释一下为什么撤回（比如害羞了、说错话了、发错表情了等），然后继续聊天。语气要自然。]`
+                    : `[系统提示：你（AI角色）刚才撤回了你发出的上一条消息。请发一条新消息，可以解释一下为什么撤回（比如打错字了、发错表情了等），然后继续聊天。]`;
+                  
+                  const recallContext = currentLatestMessages.map(m => ({
+                    role: m.role === 'model' ? 'assistant' : 'user',
+                    content: `[ID: ${m.id}] ${m.id === lastAiMsgId ? '[此消息已撤回]' : (m.isRecalled ? '[此消息已撤回]' : m.text)}`
+                  }));
+                  const aiResponse = await fetchAiResponse(recallPrompt, recallContext, currentPersona, apiSettings, worldbook, userProfile, aiRef);
+                  const cleanedRecallResponse = aiResponse.responseText.replace(/\[ID:\s*[^\]]+\]/gi, '').trim();
+                  
+                  const newAiMsg: Message = { 
+                    id: (Date.now() + 2).toString(), 
+                    personaId: currentPersona.id,
+                    role: 'model', 
+                    text: cleanedRecallResponse,
+                    msgType: 'text',
+                    timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    isRead: true,
+                    createdAt: Date.now(),
+                    theaterId
+                  };
+                  setMessages(prev => [...prev, newAiMsg]);
+                } catch (e) {
+                  console.error("AI recall error:", e);
+                } finally {
+                  pendingRequests.current = Math.max(0, pendingRequests.current - 1);
+                  setIsTyping(pendingRequests.current > 0);
+                }
               }
-            }, 2000 + Math.random() * 2000);
+            }, recallDelay);
           }
 
       } catch (error: any) {
@@ -1224,6 +1246,14 @@ export function ChatScreen({
   const handleRecall = async (msgId: string) => {
     const msg = messages.find(m => m.id === msgId);
     if (!msg) return;
+
+    // Safety check: only allow recall within 2 minutes
+    const timeDiff = Date.now() - (msg.createdAt || Date.now());
+    if (timeDiff > 120000) {
+      alert('超过2分钟的消息不能撤回');
+      setActiveMessageMenu(null);
+      return;
+    }
 
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, isRecalled: true } : m));
     setActiveMessageMenu(null);
@@ -1276,6 +1306,7 @@ export function ChatScreen({
             amount: part.amount,
             transferNote: part.transferNote,
             transferStatus: (part.msgType === 'transfer' && !part.isRefund && !part.isReceived) ? 'pending' : undefined,
+            checkPhoneStatus: part.msgType === 'checkPhoneRequest' ? 'pending' : undefined,
             relativeCard: part.relativeCard,
             sticker: part.sticker,
             isRequest: part.isRequest,
@@ -1558,6 +1589,7 @@ export function ChatScreen({
           amount: part.amount,
           transferNote: part.transferNote,
           transferStatus: (part.msgType === 'transfer' && !part.isRefund && !part.isReceived) ? 'pending' : undefined,
+          checkPhoneStatus: part.msgType === 'checkPhoneRequest' ? 'pending' : undefined,
           relativeCard: part.relativeCard,
           sticker: part.sticker,
           isRequest: part.isRequest,
@@ -1580,6 +1612,18 @@ export function ChatScreen({
       pendingRequests.current = Math.max(0, pendingRequests.current - 1);
       setIsLoading(false);
       setIsTyping(pendingRequests.current > 0);
+    }
+  };
+
+  const handleCheckPhoneResponse = (msgId: string, accept: boolean) => {
+    setMessages(prev => prev.map(m => 
+      m.id === msgId ? { ...m, checkPhoneStatus: accept ? 'accepted' : 'rejected' } : m
+    ));
+    
+    if (accept) {
+      handleSend("[系统提示：用户允许了你查看TA的手机。你在TA的手机里发现了一些可疑/有趣的东西（请根据你的人设自由发挥，例如：发现和别人的暧昧聊天记录、奇怪的搜索记录、或者什么都没发现但你故意找茬等）。请你务必使用 [ACTION:IMAGE:描述] 标签生成一张你看到的手机屏幕截图（例如：[ACTION:IMAGE:一张手机屏幕截图，显示着一段暧昧的聊天记录]），然后把截图发给用户并直接质问或评论用户。]", 'system');
+    } else {
+      handleSend("[系统提示：用户拒绝了你查看TA手机的请求。请根据你的人设作出反应（例如：生气、怀疑、撒娇等）。]", 'system');
     }
   };
 
@@ -1828,9 +1872,9 @@ export function ChatScreen({
   };
 
   return (
-    <div className="w-full h-full bg-neutral-100 flex flex-col pt-16">
+    <div className="w-full h-full bg-neutral-100 flex flex-col pt-20">
       {/* Header */}
-      <div className="h-12 flex items-center px-2 bg-neutral-100 border-b border-neutral-200 shrink-0 z-[60]">
+      <div className="h-12 flex items-center px-2 bg-neutral-100 border-b border-neutral-200 shrink-0 z-[70]">
         {activeTab === 'chat' && currentChatId ? (
           <button onClick={() => setCurrentChatId(null)} className="text-neutral-800 p-2 active:opacity-70 flex items-center z-50">
             <ChevronLeft size={24} />
@@ -2110,8 +2154,6 @@ export function ChatScreen({
                   return null; // Removed redundant inner voice beautification
                 }
 
-                const canRecall = msg.role === 'user' && msg.createdAt && (Date.now() - msg.createdAt < 2 * 60 * 1000);
-
                 let parsedUserCss = {};
                 let parsedAiCss = {};
                 try {
@@ -2122,7 +2164,7 @@ export function ChatScreen({
                 } catch (e) {}
 
                 return (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} relative`}>
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-start relative`}>
                   {msg.role === 'model' && (
                     <div className="relative mr-3 shrink-0 cursor-pointer active:scale-95 transition-transform" onClick={() => handleAvatarClick(msg)} onDoubleClick={() => handlePat('model')}>
                     <div className="relative w-10 h-10 shrink-0">
@@ -2158,7 +2200,7 @@ export function ChatScreen({
                     </div>
                   )}
 
-                    <div className="relative max-w-[70%]" onClick={() => setActiveMessageMenu(activeMessageMenu === msg.id ? null : msg.id)}>
+                    <div className="relative max-w-[80%]" onClick={() => setActiveMessageMenu(activeMessageMenu === msg.id ? null : msg.id)}>
                       {msg.quotedMessageId && (
                         <div className={`mb-1 p-2 rounded-lg text-xs border-l-2 ${
                           msg.role === 'user' ? 'bg-black/5 border-black/20 text-neutral-600' : 'bg-neutral-100 border-neutral-300 text-neutral-500'
@@ -2175,20 +2217,22 @@ export function ChatScreen({
                           })()}
                         </div>
                       )}
-                      {msg.msgType === 'xhsPost' && msg.xhsPost ? (
-                        <div 
-                          className={`flex flex-col gap-2 rounded-xl p-3 w-64 shadow-sm ${msg.role === 'user' ? 'custom-bubble-user' : 'custom-bubble-ai'}`}
-                          style={{
-                            backgroundColor: msg.role === 'user' 
-                              ? (theme.chatBubbleUserCss && theme.chatBubbleUserCss.toLowerCase().includes('background') ? undefined : (theme.userBubbleColor || '#95ec69')) 
-                              : (theme.chatBubbleAiCss && theme.chatBubbleAiCss.toLowerCase().includes('background') ? undefined : (theme.aiBubbleColor || '#ffffff')),
-                            backgroundImage: msg.role === 'user' && theme.chatBubbleUser ? `url(${theme.chatBubbleUser})` : (msg.role === 'model' && theme.chatBubbleAi ? `url(${theme.chatBubbleAi})` : undefined),
-                            backgroundSize: '100% 100%',
-                            color: msg.role === 'user' ? (theme.userTextColor || '#171717') : (theme.aiTextColor || '#171717'),
-                            border: (msg.role === 'model' && !theme.aiBubbleColor && !theme.chatBubbleAi && !theme.chatBubbleAiCss) ? '1px solid #e5e5e5' : undefined,
-                            ...(msg.role === 'user' ? parsedUserCss : parsedAiCss),
-                          }}
-                        >
+
+                      <div className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        {msg.msgType === 'xhsPost' && msg.xhsPost ? (
+                          <div 
+                            className={`flex flex-col gap-2 rounded-xl p-3 w-64 shadow-sm ${msg.role === 'user' ? 'custom-bubble-user' : 'custom-bubble-ai'}`}
+                            style={{
+                              backgroundColor: msg.role === 'user' 
+                                ? (theme.chatBubbleUserCss && theme.chatBubbleUserCss.toLowerCase().includes('background') ? undefined : (theme.userBubbleColor || '#95ec69')) 
+                                : (theme.chatBubbleAiCss && theme.chatBubbleAiCss.toLowerCase().includes('background') ? undefined : (theme.aiBubbleColor || '#ffffff')),
+                              backgroundImage: msg.role === 'user' && theme.chatBubbleUser ? `url(${theme.chatBubbleUser})` : (msg.role === 'model' && theme.chatBubbleAi ? `url(${theme.chatBubbleAi})` : undefined),
+                              backgroundSize: '100% 100%',
+                              color: msg.role === 'user' ? (theme.userTextColor || '#171717') : (theme.aiTextColor || '#171717'),
+                              border: (msg.role === 'model' && !theme.aiBubbleColor && !theme.chatBubbleAi && !theme.chatBubbleAiCss) ? '1px solid #e5e5e5' : undefined,
+                              ...(msg.role === 'user' ? parsedUserCss : parsedAiCss),
+                            }}
+                          >
                           <div className="text-[13px] text-neutral-600 mb-1 flex items-center gap-1">
                             <img src="https://p3-pc-sign.byteimg.com/tos-cn-i-uz8ut6080o/8316982956274768864~tplv-uz8ut6080o-image.png?x-expires=1710000000&x-signature=..." className="w-4 h-4 rounded-full" alt="xhs logo" />
                             {msg.role === 'user' ? '我分享了小红书帖子' : '分享了小红书帖子'}
@@ -2242,18 +2286,19 @@ export function ChatScreen({
                           </div>
                         </div>
                       ) : msg.msgType === 'music' && msg.song ? (
-                      <div 
-                        className={`flex flex-col gap-2 rounded-xl p-3 w-64 shadow-sm ${msg.role === 'user' ? 'custom-bubble-user' : 'custom-bubble-ai'}`}
-                        style={{
-                          backgroundColor: msg.role === 'user' 
-                            ? (theme.chatBubbleUserCss && theme.chatBubbleUserCss.toLowerCase().includes('background') ? undefined : (theme.userBubbleColor || '#95ec69')) 
-                            : (theme.chatBubbleAiCss && theme.chatBubbleAiCss.toLowerCase().includes('background') ? undefined : (theme.aiBubbleColor || '#ffffff')),
-                          backgroundImage: msg.role === 'user' && theme.chatBubbleUser ? `url(${theme.chatBubbleUser})` : (msg.role === 'model' && theme.chatBubbleAi ? `url(${theme.chatBubbleAi})` : undefined),
-                          backgroundSize: '100% 100%',
-                          color: msg.role === 'user' ? (theme.userTextColor || '#171717') : (theme.aiTextColor || '#171717'),
-                          border: (msg.role === 'model' && !theme.aiBubbleColor && !theme.chatBubbleAi && !theme.chatBubbleAiCss) ? '1px solid #e5e5e5' : undefined
-                        }}
-                      >
+                        <div 
+                          className={`flex flex-col gap-2 rounded-xl p-3 w-64 shadow-sm ${msg.role === 'user' ? 'custom-bubble-user' : 'custom-bubble-ai'}`}
+                          style={{
+                            backgroundColor: msg.role === 'user' 
+                              ? (theme.chatBubbleUserCss && theme.chatBubbleUserCss.toLowerCase().includes('background') ? undefined : (theme.userBubbleColor || '#95ec69')) 
+                              : (theme.chatBubbleAiCss && theme.chatBubbleAiCss.toLowerCase().includes('background') ? undefined : (theme.aiBubbleColor || '#ffffff')),
+                            backgroundImage: msg.role === 'user' && theme.chatBubbleUser ? `url(${theme.chatBubbleUser})` : (msg.role === 'model' && theme.chatBubbleAi ? `url(${theme.chatBubbleAi})` : undefined),
+                            backgroundSize: '100% 100%',
+                            color: msg.role === 'user' ? (theme.userTextColor || '#171717') : (theme.aiTextColor || '#171717'),
+                            border: (msg.role === 'model' && !theme.aiBubbleColor && !theme.chatBubbleAi && !theme.chatBubbleAiCss) ? '1px solid #e5e5e5' : undefined,
+                            ...(msg.role === 'user' ? parsedUserCss : parsedAiCss),
+                          }}
+                        >
                         <div className="text-[13px] text-neutral-600 mb-1">{msg.role === 'user' ? '我分享了歌曲' : '分享了歌曲'}</div>
                         <div className="flex items-center gap-3 bg-white/50 p-2 rounded-lg">
                           <img src={msg.song.cover} className="w-10 h-10 rounded-md object-cover" />
@@ -2271,8 +2316,14 @@ export function ChatScreen({
                           onClick={() => onNavigate('music', { personaId: currentPersona?.id })}
                           className={`flex flex-col gap-2 rounded-xl p-3 w-64 shadow-sm cursor-pointer active:opacity-90 ${msg.role === 'user' ? 'custom-bubble-user' : 'custom-bubble-ai'}`}
                           style={{
-                            backgroundColor: '#1aad19',
-                            color: 'white'
+                            backgroundColor: msg.role === 'user' 
+                              ? (theme.userBubbleColor || (theme.chatBubbleUserCss && theme.chatBubbleUserCss.toLowerCase().includes('background') ? undefined : '#95ec69')) 
+                              : (theme.aiBubbleColor || (theme.chatBubbleAiCss && theme.chatBubbleAiCss.toLowerCase().includes('background') ? undefined : '#ffffff')),
+                            backgroundImage: msg.role === 'user' && theme.chatBubbleUser ? `url(${theme.chatBubbleUser})` : (msg.role === 'model' && theme.chatBubbleAi ? `url(${theme.chatBubbleAi})` : undefined),
+                            backgroundSize: '100% 100%',
+                            color: msg.role === 'user' ? (theme.userTextColor || '#171717') : (theme.aiTextColor || '#171717'),
+                            border: (msg.role === 'model' && !theme.aiBubbleColor && !theme.chatBubbleAi && !theme.chatBubbleAiCss) ? '1px solid #e5e5e5' : undefined,
+                            ...(msg.role === 'user' ? parsedUserCss : parsedAiCss),
                           }}
                         >
                           <div className="flex items-center gap-2 mb-1">
@@ -2290,7 +2341,7 @@ export function ChatScreen({
                           </div>
                         </div>
                       ) : (
-                        <div className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        <>
                           {msg.text ? (
                             <div 
                               className={`rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-sm ${
@@ -2417,24 +2468,10 @@ export function ChatScreen({
                             </div>
                           )}
 
-                          {(msg.msgType as any) === 'listenTogether' && (
-                            <div className={`flex items-center gap-3 rounded-xl p-3 w-60 bg-[#1aad19] text-white shadow-sm cursor-pointer active:opacity-90`} onClick={() => onNavigate('music', { personaId: currentPersona?.id })}>
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-white/20`}>
-                                <Music size={20} className="text-white" />
-                              </div>
-                              <div className="flex-1 overflow-hidden">
-                                <div className="text-[15px] font-medium">一起听歌</div>
-                                <div className="text-[12px] opacity-80 truncate">
-                                  点击进入音乐室
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
                           {msg.msgType === 'transfer' && (() => {
                             return (
                             <div 
-                              className={`flex items-center gap-3 rounded-xl p-3 w-60 bg-[#f39b3a] text-white shadow-sm ${msg.role === 'user' ? 'custom-bubble-user' : 'custom-bubble-ai'} cursor-pointer active:opacity-80 ${msg.transferStatus === 'accepted' || msg.transferStatus === 'rejected' ? 'opacity-70' : ''}`}
+                              className={`flex items-center gap-3 rounded-xl p-3 w-64 bg-[#f39b3a] text-white shadow-sm ${msg.role === 'user' ? 'custom-bubble-user' : 'custom-bubble-ai'} cursor-pointer active:opacity-80 ${msg.transferStatus === 'accepted' || msg.transferStatus === 'rejected' ? 'opacity-70' : ''}`}
                               onClick={() => {
                                 setSelectedTransferMsg(msg);
                               }}
@@ -2458,7 +2495,7 @@ export function ChatScreen({
                           )})()}
 
                           {msg.msgType === 'relativeCard' && (
-                            <div className={`flex items-center gap-3 rounded-xl p-3 w-60 ${msg.role === 'user' ? 'bg-[#f39b3a] text-white custom-bubble-user' : 'bg-white border border-neutral-200 text-neutral-800 custom-bubble-ai'}`}>
+                            <div className={`flex items-center gap-3 rounded-xl p-3 w-64 ${msg.role === 'user' ? 'bg-[#f39b3a] text-white custom-bubble-user' : 'bg-white border border-neutral-200 text-neutral-800 custom-bubble-ai'}`}>
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${msg.role === 'user' ? 'bg-white/20' : 'bg-[#f39b3a]/10'}`}>
                                 <CreditCard size={20} className={msg.role === 'user' ? 'text-white' : 'text-[#f39b3a]'} />
                               </div>
@@ -2470,22 +2507,43 @@ export function ChatScreen({
                               </div>
                             </div>
                           )}
-                        </div>
-                      )}
 
-                    {activeMessageMenu === msg.id && (
-                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-neutral-800 text-white text-[12px] py-1.5 px-3 rounded-lg shadow-lg whitespace-nowrap z-50 flex gap-4">
-                        {msg.role === 'model' && !msg.isRead && (
-                          <button onClick={(e) => { e.stopPropagation(); setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, isRead: true } : m)); setActiveMessageMenu(null); }} className="active:opacity-70">设为已读</button>
-                        )}
-                        {canRecall && (
-                          <button onClick={(e) => { e.stopPropagation(); handleRecall(msg.id); }} className="active:opacity-70">撤回</button>
-                        )}
-                        <button onClick={(e) => { e.stopPropagation(); setQuotedMessage(msg); setActiveMessageMenu(null); }} className="active:opacity-70">引用</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleStartEdit(msg); }} className="active:opacity-70">编辑</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id); }} className="active:opacity-70 text-red-400">删除</button>
-                      </div>
-                    )}
+                          {msg.msgType === 'checkPhoneRequest' && (
+                            <div className={`flex flex-col gap-2 rounded-xl p-3 w-64 bg-white border border-neutral-200 text-neutral-800 shadow-sm custom-bubble-ai`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500">
+                                  <Smartphone size={16} />
+                                </div>
+                                <div className="text-[14px] font-medium flex-1">请求查看手机</div>
+                              </div>
+                              <div className="text-[13px] text-neutral-600 mb-2">
+                                {currentPersona?.name} 想要查看你的手机内容。
+                              </div>
+                              {msg.checkPhoneStatus === 'pending' ? (
+                                <div className="flex gap-2 border-t border-neutral-100 pt-2">
+                                  <button 
+                                    onClick={() => handleCheckPhoneResponse(msg.id, false)}
+                                    className="flex-1 py-1.5 bg-neutral-100 text-neutral-600 text-[13px] rounded-lg active:bg-neutral-200"
+                                  >
+                                    拒绝
+                                  </button>
+                                  <button 
+                                    onClick={() => handleCheckPhoneResponse(msg.id, true)}
+                                    className="flex-1 py-1.5 bg-blue-500 text-white text-[13px] rounded-lg active:bg-blue-600"
+                                  >
+                                    允许
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="text-[12px] text-neutral-400 border-t border-neutral-100 pt-2 text-center">
+                                  {msg.checkPhoneStatus === 'accepted' ? '已允许' : '已拒绝'}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {msg.role === 'model' && (
@@ -2497,26 +2555,28 @@ export function ChatScreen({
 
                   {msg.role === 'user' && (
                     <div className="relative ml-3 shrink-0 cursor-pointer active:scale-95 transition-transform" onDoubleClick={() => handlePat('user')}>
-                      <img 
-                        src={userProfile.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'} 
-                        className="w-10 h-10 rounded-lg object-cover" 
-                        alt="user avatar" 
-                      />
-                      {userProfile.avatarFrame && (
+                      <div className="relative w-10 h-10 shrink-0">
                         <img 
-                          src={userProfile.avatarFrame} 
-                          className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] object-contain pointer-events-none z-10 select-none"
-                          alt="frame"
-                          style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `translate(${userProfile.avatarFrameX || 0}px, ${userProfile.avatarFrameY || 0}px) scale(${userProfile.avatarFrameScale || 1})` }}
+                          src={userProfile.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'} 
+                          className="w-10 h-10 rounded-lg object-cover" 
+                          alt="user avatar" 
                         />
-                      )}
-                      {userProfile.avatarPendant && (
-                        <img 
-                          src={userProfile.avatarPendant} 
-                          className="absolute -top-1 -right-1 w-5 h-5 object-contain pointer-events-none z-20 select-none"
-                          alt="pendant"
-                        />
-                      )}
+                        {userProfile.avatarFrame && (
+                          <img 
+                            src={userProfile.avatarFrame} 
+                            className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] object-contain pointer-events-none z-10 select-none"
+                            alt="frame"
+                            style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.1))', transform: `translate(${userProfile.avatarFrameX || 0}px, ${userProfile.avatarFrameY || 0}px) scale(${userProfile.avatarFrameScale || 1})` }}
+                          />
+                        )}
+                        {userProfile.avatarPendant && (
+                          <img 
+                            src={userProfile.avatarPendant} 
+                            className="absolute -top-1 -right-1 w-5 h-5 object-contain pointer-events-none z-20 select-none"
+                            alt="pendant"
+                          />
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -4674,6 +4734,104 @@ export function ChatScreen({
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {activeMessageMenu && (() => {
+          const msg = messages.find(m => m.id === activeMessageMenu);
+          if (!msg) return null;
+          // User can only recall their own messages within 2 minutes. AI messages cannot be recalled by user.
+          const canRecall = msg.role === 'user' && !msg.isRecalled && (Date.now() - (msg.createdAt || Date.now()) < 120000);
+          
+          return (
+            <div className="fixed inset-0 z-[200] flex flex-col justify-end">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setActiveMessageMenu(null)}
+                className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+              />
+              <motion.div 
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="relative bg-white rounded-t-[32px] p-6 pb-12 shadow-2xl border-t border-white/20"
+              >
+                <div className="w-12 h-1.5 bg-neutral-200 rounded-full mx-auto mb-6" />
+                
+                <div className="grid grid-cols-4 gap-4">
+                  {msg.role === 'model' && !msg.isRead && (
+                    <button 
+                      onClick={() => {
+                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, isRead: true } : m));
+                        setActiveMessageMenu(null);
+                      }}
+                      className="flex flex-col items-center gap-2"
+                    >
+                      <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 active:scale-90 transition-transform">
+                        <Shield size={24} />
+                      </div>
+                      <span className="text-[12px] text-neutral-600 font-medium">设为已读</span>
+                    </button>
+                  )}
+                  
+                  {canRecall && (
+                    <button 
+                      onClick={() => handleRecall(msg.id)}
+                      className="flex flex-col items-center gap-2"
+                    >
+                      <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 active:scale-90 transition-transform">
+                        <RotateCcw size={24} />
+                      </div>
+                      <span className="text-[12px] text-neutral-600 font-medium">撤回</span>
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={() => {
+                      setQuotedMessage(msg);
+                      setActiveMessageMenu(null);
+                    }}
+                    className="flex flex-col items-center gap-2"
+                  >
+                    <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 active:scale-90 transition-transform">
+                      <Bookmark size={24} />
+                    </div>
+                    <span className="text-[12px] text-neutral-600 font-medium">引用</span>
+                  </button>
+
+                  <button 
+                    onClick={() => handleStartEdit(msg)}
+                    className="flex flex-col items-center gap-2"
+                  >
+                    <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 active:scale-90 transition-transform">
+                      <Settings size={24} />
+                    </div>
+                    <span className="text-[12px] text-neutral-600 font-medium">编辑</span>
+                  </button>
+
+                  <button 
+                    onClick={() => handleDeleteMessage(msg.id)}
+                    className="flex flex-col items-center gap-2"
+                  >
+                    <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 active:scale-90 transition-transform">
+                      <Trash2 size={24} />
+                    </div>
+                    <span className="text-[12px] text-neutral-600 font-medium">删除</span>
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => setActiveMessageMenu(null)}
+                  className="w-full mt-8 py-4 bg-neutral-100 text-neutral-500 font-bold rounded-2xl active:scale-[0.98] transition-transform"
+                >
+                  取消
+                </button>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
       {/* AI Phone Modal */}
       {showAiPhone && currentPersona && (

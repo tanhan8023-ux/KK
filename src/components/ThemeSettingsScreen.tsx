@@ -12,25 +12,6 @@ interface Props {
   onImport?: (data: string) => void;
 }
 
-const ICON_KEYS = [
-  { id: 'chat', label: '微信' },
-  { id: 'persona', label: '世界书' },
-  { id: 'music', label: '音乐' },
-  {id: 'xhs', label: '小红书' },
-  { id: 'taobao', label: '淘宝' },
-  { id: 'game', label: '游戏' },
-  { id: 'treehole', label: '树洞' },
-  { id: 'express', label: '驿站' },
-  { id: 'fooddelivery', label: '外卖' },
-  { id: 'more', label: '更多' },
-];
-
-const DOCK_ICON_KEYS = [
-  { id: 'dock_settings', label: '设置' },
-  { id: 'dock_lock', label: '锁屏' },
-  { id: 'dock_theme', label: '主题' },
-];
-
 const DEFAULT_SOUNDS = [
   { name: '默认', url: 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3' },
   { name: '清脆', url: 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3' },
@@ -176,11 +157,6 @@ export function ThemeSettingsScreen({ theme: initialTheme, onSave, onBack, onExp
     setThemeState({ ...theme, iconBgColor: e.target.value });
   };
 
-  const triggerIconUpload = (id: string) => {
-    setActiveIconId(id);
-    iconInputRef.current?.click();
-  };
-
   return (
     <div className="w-full h-full bg-neutral-50 flex flex-col pt-12">
       {isReadingFile && (
@@ -254,6 +230,38 @@ export function ThemeSettingsScreen({ theme: initialTheme, onSave, onBack, onExp
               type="file" accept="image/*" className="hidden" ref={lockWallpaperInputRef}
               onChange={(e) => handleImageUpload(e, (url) => setThemeState({ ...theme, lockScreenWallpaper: url }))}
             />
+          </div>
+
+          <div className="space-y-3 min-w-0">
+            <label className="text-[11px] font-medium text-neutral-500 ml-1 uppercase tracking-wide flex items-center gap-1.5">
+              <Lock size={12} /> 指纹样式
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['default', 'square', 'neon', 'minimal', 'glass', 'star', 'heart', 'diamond', 'cyberpunk', 'liquid', 'luxury', 'biometric'] as const).map((style) => (
+                <button
+                  key={style}
+                  onClick={() => setThemeState({ ...theme, fingerprintStyle: style })}
+                  className={`py-2 rounded-lg text-[10px] font-medium border transition-all ${
+                    (theme.fingerprintStyle || 'default') === style 
+                      ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-sm' 
+                      : 'bg-white border-neutral-200 text-neutral-600 active:bg-neutral-50'
+                  }`}
+                >
+                  {style === 'default' ? '经典圆形' : 
+                   style === 'square' ? '现代方圆' : 
+                   style === 'neon' ? '霓虹光晕' : 
+                   style === 'minimal' ? '极简无边' : 
+                   style === 'glass' ? '毛玻璃质感' :
+                   style === 'star' ? '五角星形' :
+                   style === 'heart' ? '爱心形状' : 
+                   style === 'diamond' ? '菱形结构' :
+                   style === 'cyberpunk' ? '赛博蜂巢' :
+                   style === 'liquid' ? '流体生物' :
+                   style === 'luxury' ? '奢华金边' :
+                   style === 'biometric' ? '精密扫描' : ''}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-3 min-w-0">
@@ -443,71 +451,6 @@ export function ThemeSettingsScreen({ theme: initialTheme, onSave, onBack, onExp
                 type="file" accept="image/*" className="hidden" ref={weatherWidgetBgInputRef}
                 onChange={(e) => handleImageUpload(e, (url) => setThemeState({ ...theme, weatherWidgetBg: url }))}
               />
-            </div>
-          </div>
-        </div>
-
-        {/* Custom Icons */}
-        <div className="space-y-3">
-          <label className="text-[13px] font-medium text-neutral-500 ml-1 uppercase tracking-wide flex items-center gap-2">
-            <Grid size={14} /> 自定义图标
-          </label>
-          <div className="bg-white border border-neutral-200 rounded-xl p-4 shadow-sm">
-            <div className="grid grid-cols-4 gap-4">
-              {ICON_KEYS.map((item) => (
-                <div key={item.id} className="flex flex-col items-center gap-1.5">
-                  <button 
-                    onClick={() => triggerIconUpload(item.id)}
-                    className="w-12 h-12 rounded-xl border border-neutral-200 flex items-center justify-center overflow-hidden bg-neutral-50 active:scale-95 transition-transform"
-                  >
-                    {theme.customIcons?.[item.id] ? (
-                      <img src={theme.customIcons[item.id]} alt={item.label} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-[20px] text-neutral-300">+</span>
-                    )}
-                  </button>
-                  <span className="text-[10px] text-neutral-500">{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <input 
-            type="file" accept="image/*" className="hidden" ref={iconInputRef}
-            onChange={(e) => {
-              if (activeIconId) {
-                handleImageUpload(e, (url) => {
-                  setThemeState({
-                    ...theme,
-                    customIcons: { ...(theme.customIcons || {}), [activeIconId]: url }
-                  });
-                });
-              }
-            }}
-          />
-        </div>
-
-        {/* Dock Icons */}
-        <div className="space-y-3">
-          <label className="text-[13px] font-medium text-neutral-500 ml-1 uppercase tracking-wide flex items-center gap-2">
-            <Grid size={14} /> 底部Dock栏图标
-          </label>
-          <div className="bg-white border border-neutral-200 rounded-xl p-4 shadow-sm">
-            <div className="grid grid-cols-4 gap-4">
-              {DOCK_ICON_KEYS.map((item) => (
-                <div key={item.id} className="flex flex-col items-center gap-1.5">
-                  <button 
-                    onClick={() => triggerIconUpload(item.id)}
-                    className="w-12 h-12 rounded-xl border border-neutral-200 flex items-center justify-center overflow-hidden bg-neutral-50 active:scale-95 transition-transform"
-                  >
-                    {theme.customIcons?.[item.id] ? (
-                      <img src={theme.customIcons[item.id]} alt={item.label} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-[20px] text-neutral-300">+</span>
-                    )}
-                  </button>
-                  <span className="text-[10px] text-neutral-500">{item.label}</span>
-                </div>
-              ))}
             </div>
           </div>
         </div>

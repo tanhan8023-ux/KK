@@ -392,6 +392,8 @@ export async function fetchAiResponse(
     "   - 亲属卡：[RELATIVE_CARD: 额度]\n" +
     "   - 点外卖：[ORDER: 食物名称]\n" +
     "     * ⚠️ **严格限制**：点外卖功能非常昂贵。**只有**在用户明确表示“饿了”、“想吃东西”或者明确要求点外卖时才能使用。**绝对禁止**在用户没有提及食物时主动点外卖。\n" +
+    "   - **撤回消息**：如果你在发出消息后感到后悔、害羞、或者觉得说错了话，你可以在回复的最后加上 [RECALL]。这会模拟你在发出消息后立即将其撤回。请根据你的人设和心情谨慎使用。\n" +
+    "   - **查手机**：如果你根据人设、心情或当前情景，突然对用户产生了怀疑、好奇，或者就是想“查岗”，你可以在回复的最后加上 [ACTION:CHECK_PHONE]。这会向用户发送一个查看手机的请求。请像真人一样，在聊天中自然地提出这个要求，例如：“你最近怎么老是抱着手机？给我看看你的手机！[ACTION:CHECK_PHONE]”\n" +
     "3. 指令必须包含中括号，冒号后可以有空格。金额必须是纯数字。\n" +
     "4. **已读不回**：如果你认为当前对话已经结束，或者根据你的人设你现在不想理会用户（例如你正在生气、高冷、或者觉得没必要回复），你可以直接输出 [NO_REPLY]。这会让用户看到你“已读”了消息但没有回复。请谨慎使用，确保符合人设。" + (isOffline ? "⚠️注意：由于你现在处于离线状态，必须生成自动回复，绝对禁止输出 [NO_REPLY]！" : ""),
     // Check for persona-specific user settings first, fallback to global user persona
@@ -486,6 +488,20 @@ export async function fetchAiResponse(
       }
     }
 
+    const imageMatch = responseText.match(/\[ACTION:IMAGE:\s*([^\]]+)\]/i);
+    if (imageMatch) {
+      const imagePrompt = imageMatch[1].trim();
+      if (!imagePrompt.startsWith('http') && !imagePrompt.startsWith('data:')) {
+         try {
+           const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY as string;
+           const imageUrl = await generateImage(imagePrompt, apiKey);
+           responseText = responseText.replace(imageMatch[0], `[STICKER: ${imageUrl}]`); // Reusing sticker rendering for simplicity
+         } catch (e) {
+           console.error("Failed to generate action image:", e);
+         }
+      }
+    }
+
     return { responseText: processAiResponse(responseText), functionCalls: undefined };
   } else {
     // For Google GenAI, we need a fresh instance if the apiKey changed
@@ -521,6 +537,20 @@ export async function fetchAiResponse(
            responseText = responseText.replace(stickerMatch[0], `[STICKER: ${imageUrl}]`);
          } catch (e) {
            console.error("Failed to generate sticker image:", e);
+         }
+      }
+    }
+
+    const imageMatch = responseText.match(/\[ACTION:IMAGE:\s*([^\]]+)\]/i);
+    if (imageMatch) {
+      const imagePrompt = imageMatch[1].trim();
+      if (!imagePrompt.startsWith('http') && !imagePrompt.startsWith('data:')) {
+         try {
+           const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY as string;
+           const imageUrl = await generateImage(imagePrompt, apiKey);
+           responseText = responseText.replace(imageMatch[0], `[STICKER: ${imageUrl}]`); // Reusing sticker rendering for simplicity
+         } catch (e) {
+           console.error("Failed to generate action image:", e);
          }
       }
     }

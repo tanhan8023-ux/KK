@@ -109,13 +109,13 @@ export function Phone({ children, onHomeClick, theme, hideHomeIndicator }: { chi
             
             {/* Dynamic Battery */}
             <div 
-              className="flex items-center gap-1 ml-1 cursor-pointer pointer-events-auto"
-              onClick={() => setIsCharging(!isCharging)}
+              className="flex items-center gap-1 ml-1 cursor-pointer pointer-events-none"
               title="Click to toggle charging"
             >
               <span className="text-[11px]">{battery}</span>
               <div 
-                className="relative w-6 h-3 border rounded-[4px] p-[1px] flex items-center"
+                className="relative w-6 h-3 border rounded-[4px] p-[1px] flex items-center pointer-events-auto"
+                onClick={() => setIsCharging(!isCharging)}
                 style={{ borderColor: theme.statusColor || '#ffffff' }}
               >
                 <div 

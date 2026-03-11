@@ -31,7 +31,7 @@ export function LockScreen({ onUnlock, theme, notification, personas }: Props) {
       setScanComplete(true);
       setIsScanning(false);
       setTimeout(onUnlock, 300);
-    }, 500);
+    }, 1500); // Increased duration for better animation feel
   };
 
   const formatTime = (date: Date) => {
@@ -113,25 +113,78 @@ export function LockScreen({ onUnlock, theme, notification, personas }: Props) {
         <div className="relative">
           <motion.button
             onPointerDown={handleFingerprintClick}
-            className={`w-20 h-20 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-              isScanning ? 'border-blue-400 bg-blue-400/20' : scanComplete ? 'border-green-400 bg-green-400/20' : 'border-white/50 bg-white/10'
-            } backdrop-blur-md shadow-lg active:scale-90`}
+            className={`flex items-center justify-center transition-all duration-500 active:scale-90 ${
+              theme.fingerprintStyle === 'square' ? 'w-20 h-20 rounded-2xl border-2' :
+              theme.fingerprintStyle === 'neon' ? 'w-20 h-20 rounded-full border-2 shadow-[0_0_25px_rgba(96,165,250,0.8)] animate-pulse' :
+              theme.fingerprintStyle === 'minimal' ? 'w-16 h-16 rounded-full' :
+              theme.fingerprintStyle === 'glass' ? 'w-20 h-20 rounded-full border border-white/40 bg-white/20 backdrop-blur-xl shadow-2xl' :
+              theme.fingerprintStyle === 'star' ? 'w-20 h-20 [clip-path:polygon(50%_0%,61%_35%,98%_35%,68%_57%,79%_91%,50%_70%,21%_91%,32%_57%,2%_35%,39%_35%)]' :
+              theme.fingerprintStyle === 'heart' ? 'w-20 h-20 [clip-path:polygon(50%_100%,0%_45%,0%_20%,20%_0%,50%_25%,80%_0%,100%_20%,100%_45%)]' :
+              theme.fingerprintStyle === 'diamond' ? 'w-20 h-20 rotate-45 border-2' :
+              theme.fingerprintStyle === 'cyberpunk' ? 'w-20 h-20 [clip-path:polygon(25%_0%,75%_0%,100%_50%,75%_100%,25%_100%,0%_50%)] border-2 border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]' :
+              theme.fingerprintStyle === 'liquid' ? 'w-20 h-20 rounded-[40%_60%_70%_30%/40%_50%_60%_40%] animate-[morph_8s_ease-in-out_infinite] border-2' :
+              theme.fingerprintStyle === 'luxury' ? 'w-20 h-20 rounded-full border-2 border-amber-200 bg-gradient-to-br from-amber-100/20 to-amber-400/20 shadow-[0_0_20px_rgba(251,191,36,0.3)]' :
+              theme.fingerprintStyle === 'biometric' ? 'w-20 h-20 rounded-full border-2 border-emerald-400/50 bg-emerald-400/5 shadow-[inset_0_0_15px_rgba(52,211,153,0.2)]' :
+              'w-20 h-20 rounded-full border-2 border-white/60 bg-white/10 shadow-[0_0_15px_rgba(255,255,255,0.2)]'
+            } ${
+              isScanning ? 'border-blue-400 bg-blue-400/30 shadow-[0_0_30px_rgba(96,165,250,0.5)]' : 
+              scanComplete ? 'border-green-400 bg-green-400/30 shadow-[0_0_30px_rgba(74,222,128,0.5)]' : 
+              theme.fingerprintStyle === 'minimal' ? 'bg-white/5' : 
+              theme.fingerprintStyle === 'glass' ? '' : 
+              (theme.fingerprintStyle === 'star' || theme.fingerprintStyle === 'heart' || theme.fingerprintStyle === 'cyberpunk') ? 'bg-white/30' :
+              theme.fingerprintStyle === 'liquid' ? 'bg-white/20' :
+              ''
+            } backdrop-blur-md shadow-lg relative overflow-hidden`}
             animate={isScanning ? { scale: 1.1 } : { scale: 1 }}
           >
-            <Fingerprint size={40} className={`${isScanning ? 'text-blue-400' : scanComplete ? 'text-green-400' : 'text-white'} transition-colors`} />
+            {theme.fingerprintStyle === 'biometric' && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="absolute w-full h-[1px] bg-emerald-400/30" />
+                <div className="absolute w-[1px] h-full bg-emerald-400/30" />
+                <div className="w-12 h-12 rounded-full border border-emerald-400/20" />
+              </div>
+            )}
+            <div className={`${theme.fingerprintStyle === 'diamond' ? '-rotate-45' : ''} flex items-center justify-center`}>
+              <Fingerprint 
+                size={theme.fingerprintStyle === 'minimal' ? 32 : 40} 
+                className={`${
+                  isScanning ? 'text-blue-400' : 
+                  scanComplete ? 'text-green-400' : 
+                  theme.fingerprintStyle === 'neon' ? 'text-blue-400' : 
+                  theme.fingerprintStyle === 'glass' ? 'text-white/80' : 
+                  theme.fingerprintStyle === 'cyberpunk' ? 'text-cyan-400' :
+                  theme.fingerprintStyle === 'luxury' ? 'text-amber-200' :
+                  theme.fingerprintStyle === 'biometric' ? 'text-emerald-400' :
+                  'text-white'
+                } transition-colors relative z-10`} 
+              />
+              {isScanning && (
+                <motion.div 
+                  className={`absolute left-0 right-0 h-0.5 z-20 ${
+                    theme.fingerprintStyle === 'cyberpunk' ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,1)]' :
+                    theme.fingerprintStyle === 'luxury' ? 'bg-amber-200 shadow-[0_0_10px_rgba(251,191,36,1)]' :
+                    theme.fingerprintStyle === 'biometric' ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,1)]' :
+                    'bg-blue-400/60 shadow-[0_0_8px_rgba(96,165,250,0.8)]'
+                  }`}
+                  initial={{ top: '20%' }}
+                  animate={{ top: '80%' }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                />
+              )}
+            </div>
           </motion.button>
           
           {isScanning && (
-            <svg className="absolute inset-0 w-20 h-20 -rotate-90 pointer-events-none">
+            <svg className={`absolute inset-0 pointer-events-none ${theme.fingerprintStyle === 'minimal' ? 'w-16 h-16' : 'w-20 h-20'} -rotate-90`}>
               <motion.circle
-                cx="40"
-                cy="40"
-                r="38"
+                cx={theme.fingerprintStyle === 'minimal' ? "32" : "40"}
+                cy={theme.fingerprintStyle === 'minimal' ? "32" : "40"}
+                r={theme.fingerprintStyle === 'minimal' ? "30" : "38"}
                 fill="none"
-                stroke="#60a5fa"
+                stroke={theme.fingerprintStyle === 'neon' ? "#60a5fa" : "#60a5fa"}
                 strokeWidth="4"
-                strokeDasharray="239"
-                initial={{ strokeDashoffset: 239 }}
+                strokeDasharray={theme.fingerprintStyle === 'minimal' ? "188" : "239"}
+                initial={{ strokeDashoffset: theme.fingerprintStyle === 'minimal' ? 188 : 239 }}
                 animate={{ strokeDashoffset: 0 }}
                 transition={{ duration: 1.5, ease: "linear" }}
               />

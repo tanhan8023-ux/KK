@@ -394,6 +394,17 @@ export function TreeHoleScreen({ userProfile, personas, posts, setPosts, notific
 
   const handleRecallMessage = (msgId: string) => {
     if (!activeChatNpcInfo) return;
+    const chat = privateChats[activeChatNpcInfo.id];
+    const msg = chat?.find(m => m.id === msgId);
+    if (!msg) return;
+
+    // Safety check: only allow recall within 2 minutes
+    if (Date.now() - msg.time > 120000) {
+      alert('超过2分钟的消息不能撤回');
+      setActiveMessageId(null);
+      return;
+    }
+
     setPrivateChats(prev => ({
       ...prev,
       [activeChatNpcInfo.id]: prev[activeChatNpcInfo.id].map(m => 

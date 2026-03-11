@@ -187,6 +187,7 @@ export interface ThemeSettings {
   };
   dynamicStatusBg?: string;
   notificationSound?: string;
+  fingerprintStyle?: 'default' | 'square' | 'neon' | 'minimal' | 'glass' | 'star' | 'heart' | 'diamond' | 'cyberpunk' | 'liquid' | 'luxury' | 'biometric';
   innerVoiceCss?: string;
   innerVoiceBgColor?: string;
   innerVoiceTextColor?: string;
@@ -234,10 +235,11 @@ export interface Message {
   personaId: string;
   role: 'user' | 'model' | 'system';
   text: string;
-  msgType?: 'text' | 'transfer' | 'music' | 'system' | 'xhsPost' | 'taobaoProduct' | 'relativeCard' | 'sticker' | 'thought' | 'listenTogether';
+  msgType?: 'text' | 'transfer' | 'music' | 'system' | 'xhsPost' | 'taobaoProduct' | 'relativeCard' | 'sticker' | 'thought' | 'listenTogether' | 'checkPhoneRequest';
   amount?: number;
   transferNote?: string;
   transferStatus?: 'pending' | 'accepted' | 'rejected';
+  checkPhoneStatus?: 'pending' | 'accepted' | 'rejected';
   sticker?: string;
   relativeCard?: {
     limit: number;
