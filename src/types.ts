@@ -235,7 +235,8 @@ export interface Message {
   personaId: string;
   role: 'user' | 'model' | 'system';
   text: string;
-  msgType?: 'text' | 'transfer' | 'music' | 'system' | 'xhsPost' | 'taobaoProduct' | 'relativeCard' | 'sticker' | 'thought' | 'listenTogether' | 'checkPhoneRequest';
+  msgType?: 'text' | 'transfer' | 'music' | 'system' | 'xhsPost' | 'taobaoProduct' | 'relativeCard' | 'sticker' | 'thought' | 'listenTogether' | 'checkPhoneRequest' | 'image';
+  imageUrl?: string;
   amount?: number;
   transferNote?: string;
   transferStatus?: 'pending' | 'accepted' | 'rejected';
@@ -387,7 +388,7 @@ export interface Order {
   orderFor?: string; // 'me' or personaId
 }
 
-export type Screen = 'home' | 'chat' | 'persona' | 'api' | 'theme' | 'music' | 'xhs' | 'wallet' | 'treehole' | 'taobao' | 'fooddelivery' | 'bartender' | 'aiphones' | 'lovewidget';
+export type Screen = 'home' | 'chat' | 'persona' | 'api' | 'theme' | 'music' | 'xhs' | 'wallet' | 'treehole' | 'taobao' | 'fooddelivery' | 'bartender' | 'aiphones' | 'lovewidget' | 'photoalbum';
 
 
 

@@ -417,8 +417,8 @@ export async function fetchAiResponse(
 
   // Sanitize and filter context messages
   const safeContextMessages = contextMessages
-    .map(m => ({ ...m, content: sanitizeContent(m.content) }))
-    .filter(m => m.content.length > 0);
+    .map(m => ({ ...m, content: sanitizeContent(m.content), imageUrl: m.imageUrl }))
+    .filter(m => m.content.length > 0 || m.imageUrl);
 
   if (effectiveApiSettings.apiUrl) {
     let endpoint = effectiveApiSettings.apiUrl;
@@ -508,10 +508,28 @@ export async function fetchAiResponse(
     const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey as string });
 
-    const contents = safeContextMessages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
+    const contents = safeContextMessages.map(m => {
+      const parts: any[] = [];
+      if (m.content) parts.push({ text: m.content });
+      if (m.imageUrl && m.imageUrl.startsWith('data:image')) {
+        const mimeTypeMatch = m.imageUrl.match(/data:(image\/[^;]+);base64,/);
+        if (mimeTypeMatch) {
+          parts.push({
+            inlineData: {
+              mimeType: mimeTypeMatch[1],
+              data: m.imageUrl.split(',')[1]
+            }
+          });
+        }
+      }
+      return {
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts
+      };
+    });
+    
+    // Also check if safePromptText has an image (we might pass it as a special tag or just in context)
+    // For now, promptText is just text.
     contents.push({ role: 'user', parts: [{ text: safePromptText }] });
 
     const response = await ai.models.generateContent({

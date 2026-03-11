@@ -53,6 +53,7 @@ const ChatBubbleWrapper = React.memo(({
 });
 
 import { LoveWidgetScreen } from './components/LoveWidgetScreen';
+import { PhotoAlbumScreen } from './components/PhotoAlbumScreen';
 import { Screen, Persona, UserProfile, ApiSettings, ThemeSettings, Message, Moment, Song, WorldbookSettings, XHSPost, TreeHolePost, TreeHoleNotification, TreeHoleMessage, Order, Playlist, DiaryEntry } from './types';
 import { AnimatePresence, motion } from 'motion/react';
 import { GoogleGenAI } from '@google/genai';
@@ -1930,6 +1931,20 @@ export default function App() {
                   className="w-full h-full absolute inset-0 z-20 bg-white"
                 >
                   <LoveWidgetScreen 
+                    onBack={() => setCurrentScreen('home')}
+                  />
+                </motion.div>
+              )}
+              {currentScreen === 'photoalbum' && (
+                <motion.div
+                  key="photoalbum"
+                  initial={{ opacity: 0, x: '100%' }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: '100%' }}
+                  transition={{ duration: 0.3, type: 'spring', bounce: 0 }}
+                  className="w-full h-full absolute inset-0 z-20 bg-white"
+                >
+                  <PhotoAlbumScreen 
                     onBack={() => setCurrentScreen('home')}
                   />
                 </motion.div>

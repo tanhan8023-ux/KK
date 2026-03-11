@@ -73,6 +73,7 @@ export function ChatScreen({
   const [showSaveToast, setShowSaveToast] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -879,7 +880,24 @@ export function ChatScreen({
     });
   };
 
-  const handleSend = async (text: string, msgType: 'text' | 'transfer' | 'relativeCard' | 'sticker' | 'listenTogether' | 'system' = 'text', amount?: number, transferNote?: string, relativeCard?: { limit: number; status: 'active' | 'cancelled' }, sticker?: string, theaterId?: string) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          const base64Image = event.target.result as string;
+          handleSend('[图片]', 'image', undefined, undefined, undefined, undefined, undefined, base64Image);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSend = async (text: string, msgType: 'text' | 'transfer' | 'relativeCard' | 'sticker' | 'listenTogether' | 'system' | 'image' = 'text', amount?: number, transferNote?: string, relativeCard?: { limit: number; status: 'active' | 'cancelled' }, sticker?: string, theaterId?: string, imageUrl?: string) => {
     if ((!text.trim() && msgType === 'text') || !currentPersona) return;
 
     // Prevent double sending
@@ -900,6 +918,7 @@ export function ChatScreen({
       transferNote,
       relativeCard,
       sticker,
+      imageUrl,
       timestamp, 
       isRead: false, 
       status: 'sent', 
@@ -988,6 +1007,7 @@ export function ChatScreen({
                            msgType === 'relativeCard' ? `[系统提示：用户赠送了你一张亲属卡，额度为 ${relativeCard?.limit} 元。请作出符合你人设的反应。]` :
                            msgType === 'sticker' ? `[系统提示：用户发送了一个表情包。你可以选择回复文字，或者如果你也想发表情包，请包含 [STICKER: 表情名称]（可用表情：${allStickers}）。请作出符合你人设的反应。]` :
                            msgType === 'listenTogether' ? `[系统提示：用户邀请你“一起听歌”。请表现出开心和期待，可以问问用户想听什么，或者推荐一首你喜欢的歌。]` :
+                           msgType === 'image' ? `[系统提示：用户发送了一张图片。请根据图片内容作出符合你人设的反应。]` :
                            text.trim();
         
         let additionalSystemInstructions = "";
@@ -1041,7 +1061,9 @@ export function ChatScreen({
                    m.msgType === 'music' && m.song ? `用户分享了歌曲《${m.song.title}》` :
                    m.msgType === 'listenTogether' ? `[发起了“一起听歌”邀请]` :
                    m.msgType === 'sticker' ? `[STICKER: 表情包]` :
+                   m.msgType === 'image' ? `[图片]` :
                    cleanContextMessage(m.text))}`,
+          imageUrl: m.imageUrl,
           timestamp: m.createdAt || 0
         }));
 
@@ -1621,7 +1643,26 @@ export function ChatScreen({
     ));
     
     if (accept) {
-      handleSend("[系统提示：用户允许了你查看TA的手机。你在TA的手机里发现了一些可疑/有趣的东西（请根据你的人设自由发挥，例如：发现和别人的暧昧聊天记录、奇怪的搜索记录、或者什么都没发现但你故意找茬等）。请你务必使用 [ACTION:IMAGE:描述] 标签生成一张你看到的手机屏幕截图（例如：[ACTION:IMAGE:一张手机屏幕截图，显示着一段暧昧的聊天记录]），然后把截图发给用户并直接质问或评论用户。]", 'system');
+      // Create a summary of recent messages to provide context
+      const recentMessages = messages.slice(-10).map(m => `${m.role === 'user' ? '用户' : 'AI'}: ${m.text}`).join('\n');
+      
+      const systemPrompt = `[系统提示：用户允许了你查看TA的手机。
+这是你们最近的聊天记录：
+${recentMessages}
+
+【沉浸感查岗规则 - 必读】
+1. 你现在正在“看”用户的手机。你可以自由发挥，合理“虚构”你在TA手机里看到的内容（例如：和其他人的聊天记录、搜索记录、相册照片、外卖订单等），以此来和用户进行沉浸式的互动或“找茬”。
+2. ⚠️ 绝对禁止虚构不存在的App！只能提及现实中真实存在且常用的App（如：微信、抖音、淘宝、美团、小红书等），或者使用通用词汇（如：相册、浏览器、备忘录）。
+3. ⚠️ 绝对禁止虚构与“你（AI自己）”相关的、且没有在聊天记录中真实发生过的事情！例如：绝对不要说“我看到你给我买了礼物/给我转了账”，除非用户在聊天中真的这么做了。这种虚假的互动会严重破坏沉浸感。
+4. 如果你要“找茬”，请找一些生活化的、有代入感的细节。例如：
+   - “这个叫‘小美’的人是谁？你们为什么聊到半夜？”
+   - “你相册里怎么存了这么多奇怪的表情包？”
+   - “你给我的微信备注怎么连个爱心都没有？”
+   - “你刚才明明在玩手机（屏幕使用时间显示），为什么回我消息那么慢？”
+5. 请务必使用 [ACTION:IMAGE:描述] 标签生成一张你看到的手机屏幕截图（例如：[ACTION:IMAGE:一张手机屏幕截图，显示着用户和一个叫小美的女生的微信聊天记录]），然后把截图发给用户并直接质问或评论。
+6. 如果你觉得没问题，也可以乖乖把手机还给用户，并根据你的人设撒娇或表达满意。]`;
+      
+      handleSend(systemPrompt, 'system');
     } else {
       handleSend("[系统提示：用户拒绝了你查看TA手机的请求。请根据你的人设作出反应（例如：生气、怀疑、撒娇等）。]", 'system');
     }
@@ -2422,20 +2463,32 @@ export function ChatScreen({
                               )}
                             </div>
                           ) : (
-                            msg.msgType === 'sticker' && msg.sticker && (
-                              <div className="my-1">
-                                <img 
-                                  src={msg.sticker} 
-                                  className="w-32 h-32 object-contain rounded-lg bg-neutral-100 min-h-[8rem] min-w-[8rem]" 
-                                  alt="sticker" 
-                                  referrerPolicy="no-referrer"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.parentElement!.innerHTML = '<div class="w-32 h-32 bg-neutral-100 rounded-lg flex items-center justify-center text-neutral-400 text-xs">表情包加载失败</div>';
-                                  }}
-                                />
-                              </div>
-                            )
+                            <>
+                              {msg.msgType === 'sticker' && msg.sticker && (
+                                <div className="my-1">
+                                  <img 
+                                    src={msg.sticker} 
+                                    className="w-32 h-32 object-contain rounded-lg bg-neutral-100 min-h-[8rem] min-w-[8rem]" 
+                                    alt="sticker" 
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.parentElement!.innerHTML = '<div class="w-32 h-32 bg-neutral-100 rounded-lg flex items-center justify-center text-neutral-400 text-xs">表情包加载失败</div>';
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              {msg.msgType === 'image' && msg.imageUrl && (
+                                <div className="my-1">
+                                  <img 
+                                    src={msg.imageUrl} 
+                                    className="max-w-[200px] max-h-[300px] object-cover rounded-lg bg-neutral-100" 
+                                    alt="uploaded image" 
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                              )}
+                            </>
                           )}
 
                           {/* Inner Voice Display */}
@@ -2620,6 +2673,13 @@ export function ChatScreen({
                   }}
                   className="flex-1 bg-white rounded-md px-3 py-2 outline-none text-[15px] text-neutral-800"
                 />
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
                 {inputText.trim() ? (
                   <button 
                     onClick={() => handleSend(inputText)}
@@ -2734,6 +2794,32 @@ export function ChatScreen({
                   <Music size={28} />
                 </div>
                 <span className="text-[12px] text-neutral-500">一起听歌</span>
+              </button>
+              
+              <button 
+                onClick={() => {
+                  setShowPlusMenu(false);
+                  fileInputRef.current?.click();
+                }} 
+                className="flex flex-col items-center gap-2"
+              >
+                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-neutral-700 shadow-sm">
+                  <Camera size={28} />
+                </div>
+                <span className="text-[12px] text-neutral-500">发图片</span>
+              </button>
+              
+              <button 
+                onClick={() => {
+                  setShowPlusMenu(false);
+                  onNavigate('photoalbum');
+                }} 
+                className="flex flex-col items-center gap-2"
+              >
+                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-neutral-700 shadow-sm">
+                  <ImageIcon size={28} />
+                </div>
+                <span className="text-[12px] text-neutral-500">相册</span>
               </button>
               
               <button 
