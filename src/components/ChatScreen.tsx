@@ -1007,7 +1007,7 @@ export function ChatScreen({
                            msgType === 'relativeCard' ? `[系统提示：用户赠送了你一张亲属卡，额度为 ${relativeCard?.limit} 元。请作出符合你人设的反应。]` :
                            msgType === 'sticker' ? `[系统提示：用户发送了一个表情包。你可以选择回复文字，或者如果你也想发表情包，请包含 [STICKER: 表情名称]（可用表情：${allStickers}）。请作出符合你人设的反应。]` :
                            msgType === 'listenTogether' ? `[系统提示：用户邀请你“一起听歌”。请表现出开心和期待，可以问问用户想听什么，或者推荐一首你喜欢的歌。]` :
-                           msgType === 'image' ? `[系统提示：用户发送了一张图片。请根据图片内容作出符合你人设的反应。]` :
+                           msgType === 'image' ? `[视觉感知：用户发送了一张图片。请仔细观察图片中的每一个细节（包括主体、背景、人物表情、物品、文字等），然后以你的人设身份给出最自然、最感性的即时反应。不要像AI一样描述图片，要像真正的朋友看到照片后直接评论。如果图片内容与你之前说的话有矛盾，请以图片为准。]` :
                            text.trim();
         
         let additionalSystemInstructions = "";
@@ -1033,8 +1033,17 @@ export function ChatScreen({
         }
 
         // Get the latest messages for context (including the ones sent during debounce)
-        const latestMessages = messagesRef.current.filter(m => m.personaId === currentPersona.id && m.theaterId === theaterId).slice(-50); // Limit context size
+        let latestMessages = messagesRef.current.filter(m => m.personaId === currentPersona.id && m.theaterId === theaterId).slice(-50); // Limit context size
         
+        // If we are responding to an image, we'll pass it directly to fetchAiResponse in the prompt turn
+        // to ensure the AI associates the system prompt with the image correctly.
+        // So we remove it from context to avoid duplication.
+        let currentImageUrl = undefined;
+        if (msgType === 'image' && imageUrl) {
+          currentImageUrl = imageUrl;
+          latestMessages = latestMessages.filter(m => m.id !== userMsg.id);
+        }
+
         // Helper to clean messages for AI context (remove base64 images to save tokens)
         const cleanContextMessage = (text: string) => {
           if (!text) return '';
@@ -1096,7 +1105,8 @@ export function ChatScreen({
           additionalSystemInstructions,
           undefined,
           undefined,
-          currentPersona.isOffline
+          currentPersona.isOffline,
+          currentImageUrl
         );
 
         if (responseTextWithQuote.includes('[NO_REPLY]')) {
@@ -1662,9 +1672,9 @@ ${recentMessages}
 5. 请务必使用 [ACTION:IMAGE:描述] 标签生成一张你看到的手机屏幕截图（例如：[ACTION:IMAGE:一张手机屏幕截图，显示着用户和一个叫小美的女生的微信聊天记录]），然后把截图发给用户并直接质问或评论。
 6. 如果你觉得没问题，也可以乖乖把手机还给用户，并根据你的人设撒娇或表达满意。]`;
       
-      handleSend(systemPrompt, 'system');
+      handleSend(systemPrompt, 'system', undefined, undefined, undefined, undefined, undefined, undefined, true);
     } else {
-      handleSend("[系统提示：用户拒绝了你查看TA手机的请求。请根据你的人设作出反应（例如：生气、怀疑、撒娇等）。]", 'system');
+      handleSend("[系统提示：用户拒绝了你查看TA手机的请求。请根据你的人设作出反应（例如：生气、怀疑、撒娇等）。]", 'system', undefined, undefined, undefined, undefined, undefined, undefined, true);
     }
   };
 
@@ -2409,11 +2419,30 @@ ${recentMessages}
                               }}
                             >
                               {(() => {
-                                const cleanText = msg.text.replace(/\|\|NEXT:[^|]+\|\|/g, '').trim();
+                                const cleanText = msg.text
+                                  .replace(/\|\|NEXT:[^|]+\|\|/g, '')
+                                  .replace(/\[系统提示：[^\]]+\]/g, '')
+                                  .replace(/【视觉感知报告[^】]+】/g, '')
+                                  .replace(/\[视觉感知：[^\]]+\]/g, '')
+                                  .trim();
                                 const parts = cleanText.split(/(\[STICKER:\s*[^\]]+\])/g);
 
+                                if (!cleanText && msg.msgType !== 'image' && msg.msgType !== 'sticker' && msg.msgType !== 'transfer' && msg.msgType !== 'relativeCard' && msg.msgType !== 'music' && msg.msgType !== 'listenTogether' && msg.msgType !== 'checkPhoneRequest') {
+                                  return null;
+                                }
+
                                 return (
-                                  <div className="whitespace-pre-wrap break-words">
+                                  <div className="whitespace-pre-wrap break-words flex flex-col gap-2">
+                                    {msg.msgType === 'image' && msg.imageUrl && (
+                                      <div className="my-1">
+                                        <img 
+                                          src={msg.imageUrl} 
+                                          className="max-w-full max-h-[300px] object-cover rounded-lg bg-neutral-100" 
+                                          alt="uploaded image" 
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      </div>
+                                    )}
                                     {parts.map((part, i) => {
                                       const stickerMatch = part.match(/\[STICKER:\s*([^\]]+)\]/);
                                       if (stickerMatch) {
@@ -2439,7 +2468,7 @@ ${recentMessages}
                                             }}
                                           />
                                         );
-                                      } else if (part) {
+                                      } else if (part && part.trim() !== '[图片]') {
                                         return <span key={i}>{part}</span>;
                                       }
                                       return null;

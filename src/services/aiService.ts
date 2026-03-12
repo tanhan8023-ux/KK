@@ -344,6 +344,39 @@ ${(persona.prompts || []).join('\n')}
   return { content, imageUrl };
 }
 
+// Helper to describe image content in detail
+async function describeImage(imageUrl: string, apiKey: string): Promise<string> {
+  const ai = new GoogleGenAI({ apiKey });
+  try {
+    const mimeTypeMatch = imageUrl.match(/data:(image\/[^;]+);base64,/);
+    if (!mimeTypeMatch) return "一张图片";
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          parts: [
+            { text: "你是一个极其冷静、客观的视觉分析专家。你的任务是将图片转化为纯事实的文字描述。请严格遵守以下准则：\n1. 准确识别主体：如果是人手，就明确说是‘人的手部’；如果是日常生活场景，就描述具体的环境和物品。如果是手机屏幕截图，请明确指出。\n2. 提取文字信息：如果图片中包含聊天记录、短信、社交媒体界面或其他文字，请务必完整、准确地提取出所有可见的文字内容，并按对话顺序排列。\n3. 描述细节：精准描述姿态、颜色、材质、光影、表情。如果是手，请描述手指的动作。\n4. 严禁幻觉：只描述你确切看到的，不要猜测、不要脑补、不要赋予任何虚构的情节。绝对严禁将非动物物体识别成动物。\n5. 简洁明了：直接给出事实描述，不要有任何开场白。" },
+            {
+              inlineData: {
+                mimeType: mimeTypeMatch[1],
+                data: imageUrl.split(',')[1]
+              }
+            }
+          ]
+        }
+      ],
+      config: {
+        temperature: 0.1, // Minimum temperature for maximum factuality
+      }
+    });
+    return response.text?.trim() || "一张无法描述的图片";
+  } catch (e) {
+    console.error("Error describing image:", e);
+    return "一张图片（由于系统限制，暂时无法看清细节）";
+  }
+}
+
 export async function fetchAiResponse(
   promptText: string, 
   contextMessages: any[] = [], 
@@ -356,9 +389,23 @@ export async function fetchAiResponse(
   additionalSystemInstructions: string = "",
   forceModel?: string,
   customApiSettings?: Partial<ApiSettings>,
-  isOffline?: boolean
+  isOffline?: boolean,
+  imageUrl?: string
 ) {
   const effectiveApiSettings = { ...apiSettings, ...customApiSettings };
+  const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  
+  // Step 1: If there's an image, convert it to a detailed text description first
+  let imageDescription = "";
+  let isImageTurn = false;
+  if (imageUrl && imageUrl.startsWith('data:image')) {
+    isImageTurn = true;
+    imageDescription = await describeImage(imageUrl, apiKey as string);
+    // Inject the description into the prompt so the AI "reads" it
+    // We use a very strong tag to ensure the AI pays attention
+    promptText = `【视觉感知报告 - 优先级：最高】\n注意：用户刚刚发了一张照片。以下是系统对照片内容的客观描述，请务必以此为准，严禁将其误认为动物或产生其他幻觉：\n\n"${imageDescription}"\n\n请根据这段描述，以你的人设身份做出自然的反应。`;
+  }
+
   const now = new Date();
   const timeString = now.toLocaleString('zh-CN', { 
     year: 'numeric', month: '2-digit', day: '2-digit', 
@@ -376,6 +423,7 @@ export async function fetchAiResponse(
     ...globalPrompts,
     `【当前时间】现在是 ${timeString} 星期${dayOfWeek}。请在对话中自然地体现出对时间的感知（例如：早上好、该吃午饭了、这么晚还不睡等），但不要生硬地报时。`,
     isOffline ? `【当前状态】你目前处于“离线”状态。请根据你的人设生成一条自动回复，告知用户你稍后回复。⚠️注意：你的回复必须以“[自动回复] ”开头！例如：“[自动回复] 我现在有点忙，稍后找你。”` : `【当前状态】你目前处于“在线”状态。`,
+    "【视觉感知核心准则】当你收到图片时，你必须将其视为当前对话的最高优先级。请仔细分析图片中的每一个像素级细节。你的回复必须与图片内容产生强关联，绝对严禁忽视图片内容而自说自话。如果图片内容与之前的对话有任何偏差，请以图片展示的真实情况为准。",
     "【语言要求】\n1. 请根据你的人设决定回复语言。如果是中国人设，必须全程使用中文。如果是外国人设（如美国人、英国人），请使用对应的外语（如英语），除非用户要求你说中文。\n2. 即使你的系统提示或上下文包含其他语言，也请优先使用符合你人设的语言进行回复。",
     "【回复规范】\n1. 必须严格遵守你的角色设定，语气、用词、口癖要完全一致。\n2. 严禁重复用户的话，严禁重复自己上一句话的句式或内容。\n3. 保持对话的自然感，像真人在发微信一样，不要回复太长，除非角色设定如此。\n4. 严禁输出任何关于你是AI、语言模型或机器人的提示。\n5. 严禁在回复中包含任何形如 [ID: xxx] 的调试信息或消息ID。",
     enableQuote ? "【功能提示】你可以引用之前的消息进行回复。如果需要引用，请在回复的最开头加上 [QUOTE: 消息ID]，例如：[QUOTE: 123456789] 你的回复内容。消息ID会在上下文的 [ID: xxx] 中提供。请只在觉得非常有必要引用时才使用此功能，不要每句话都引用。注意：回复中不要包含 [ID: xxx]。" : "",
@@ -435,11 +483,41 @@ export async function fetchAiResponse(
       }
     }
     
-    const openAiMessages = [
-      { role: 'system', content: fullSystemInstruction },
-      ...safeContextMessages,
-      { role: safePromptText.startsWith('[系统提示：') ? 'system' : 'user', content: safePromptText }
+    // Refine system instruction for vision
+    const visionSystemInstruction = imageUrl ? 
+      "\n\n【最高优先级：视觉识别任务】\n用户刚刚发送了一张图片。你必须将其视为当前对话的唯一核心。请执行以下步骤：\n1. 仔细观察图片中的主体、细节、色彩和文字。\n2. 严禁基于之前的对话进行“脑补”或“幻觉”。\n3. 你的回复必须直接、准确地反映图片内容。\n4. 如果图片内容与你之前的认知有偏差，必须以图片为准。严禁说出与图片内容不符的胡话。" : "";
+
+    const finalSystemInstruction = fullSystemInstruction + visionSystemInstruction;
+
+    const openAiMessages: any[] = [
+      { role: 'system', content: finalSystemInstruction },
     ];
+
+    // Add context messages (text only to avoid confusion and save tokens)
+    safeContextMessages.forEach(m => {
+      openAiMessages.push({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content
+      });
+    });
+
+    // Add current prompt with image if available
+    // CRITICAL: If we are using the "description" method (isImageTurn), we DO NOT send the raw image to the persona model
+    // to avoid safety filters or vision confusion in the persona model.
+    if (!isImageTurn && imageUrl && imageUrl.startsWith('data:image')) {
+      openAiMessages.push({
+        role: safePromptText.startsWith('[视觉感知') ? 'user' : (safePromptText.startsWith('[系统提示') ? 'system' : 'user'),
+        content: [
+          { type: 'text', text: safePromptText },
+          { type: 'image_url', image_url: { url: imageUrl } }
+        ]
+      });
+    } else {
+      openAiMessages.push({
+        role: safePromptText.startsWith('[系统提示') ? 'system' : 'user',
+        content: safePromptText
+      });
+    }
 
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -508,35 +586,38 @@ export async function fetchAiResponse(
     const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey as string });
 
+    // Refine system instruction for vision
+    const visionSystemInstruction = imageUrl ? 
+      "\n\n【最高优先级：视觉识别任务】\n用户刚刚发送了一张图片。你必须将其视为当前对话的唯一核心。请执行以下步骤：\n1. 仔细观察图片中的主体、细节、色彩和文字。\n2. 严禁基于之前的对话进行“脑补”或“幻觉”。\n3. 你的回复必须直接、准确地反映图片内容。\n4. 如果图片内容与你之前的认知有偏差，必须以图片为准。严禁说出与图片内容不符的胡话。" : "";
+
     const contents = safeContextMessages.map(m => {
-      const parts: any[] = [];
-      if (m.content) parts.push({ text: m.content });
-      if (m.imageUrl && m.imageUrl.startsWith('data:image')) {
-        const mimeTypeMatch = m.imageUrl.match(/data:(image\/[^;]+);base64,/);
-        if (mimeTypeMatch) {
-          parts.push({
-            inlineData: {
-              mimeType: mimeTypeMatch[1],
-              data: m.imageUrl.split(',')[1]
-            }
-          });
-        }
-      }
       return {
         role: m.role === 'assistant' ? 'model' : 'user',
-        parts
+        parts: [{ text: m.content }]
       };
     });
     
-    // Also check if safePromptText has an image (we might pass it as a special tag or just in context)
-    // For now, promptText is just text.
-    contents.push({ role: 'user', parts: [{ text: safePromptText }] });
+    const lastParts: any[] = [];
+    // CRITICAL: If we are using the "description" method (isImageTurn), we DO NOT send the raw image to the persona model
+    if (!isImageTurn && imageUrl && imageUrl.startsWith('data:image')) {
+      const mimeTypeMatch = imageUrl.match(/data:(image\/[^;]+);base64,/);
+      if (mimeTypeMatch) {
+        lastParts.push({
+          inlineData: {
+            mimeType: mimeTypeMatch[1],
+            data: imageUrl.split(',')[1]
+          }
+        });
+      }
+    }
+    lastParts.push({ text: safePromptText });
+    contents.push({ role: 'user', parts: lastParts });
 
     const response = await ai.models.generateContent({
       model: forceModel || effectiveApiSettings.model || 'gemini-3-flash-preview',
       contents: contents,
       config: {
-        systemInstruction: fullSystemInstruction,
+        systemInstruction: fullSystemInstruction + visionSystemInstruction,
         temperature: effectiveApiSettings.temperature,
         seed: Math.floor(Math.random() * 1000000),
         maxOutputTokens: 2048,
