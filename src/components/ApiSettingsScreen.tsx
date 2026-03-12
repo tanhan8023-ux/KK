@@ -126,7 +126,7 @@ export function ApiSettingsScreen({ settings, personas: initialPersonas, userPro
   };
 
   const handleFetchModels = async () => {
-    const actualApiKey = apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+    const actualApiKey = apiKey || undefined || process.env.GEMINI_API_KEY;
     if (!actualApiKey) {
       setLogs(prev => [...prev, '> Error: 缺少 API KEY']);
       return;

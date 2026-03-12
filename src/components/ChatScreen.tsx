@@ -211,7 +211,7 @@ export function ChatScreen({
 如果你决定**完全不发送任何消息**（保持沉默），请仅输出：\`[NO_REPLY]\`
 `;
 
-      const aiRef = { current: new GoogleGenAI({ apiKey: apiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY as string }) };
+      const aiRef = { current: new GoogleGenAI({ apiKey: apiSettings.apiKey || undefined || process.env.GEMINI_API_KEY as string }) };
       
       // We use the existing context but inject our system instruction
       const eventPrompt = `[系统事件：用户已读你的消息但 ${timeSinceRead} 未回复。当前追问次数：${unreadPesterCount}。请决定反应。]`;
@@ -897,7 +897,7 @@ export function ChatScreen({
     }
   };
 
-  const handleSend = async (text: string, msgType: 'text' | 'transfer' | 'relativeCard' | 'sticker' | 'listenTogether' | 'system' | 'image' = 'text', amount?: number, transferNote?: string, relativeCard?: { limit: number; status: 'active' | 'cancelled' }, sticker?: string, theaterId?: string, imageUrl?: string) => {
+  const handleSend = async (text: string, msgType: 'text' | 'transfer' | 'relativeCard' | 'sticker' | 'listenTogether' | 'system' | 'image' = 'text', amount?: number, transferNote?: string, relativeCard?: { limit: number; status: 'active' | 'cancelled' }, sticker?: string, theaterId?: string, imageUrl?: string, hidden?: boolean, imageDescription?: string) => {
     if ((!text.trim() && msgType === 'text') || !currentPersona) return;
 
     // Prevent double sending
@@ -924,7 +924,9 @@ export function ChatScreen({
       status: 'sent', 
       createdAt: Date.now(),
       quotedMessageId: quotedMessage?.id,
-      theaterId
+      theaterId,
+      hidden,
+      imageDescription
     };
     setMessages(prev => [...prev, userMsg]);
 
@@ -1070,7 +1072,7 @@ export function ChatScreen({
                    m.msgType === 'music' && m.song ? `用户分享了歌曲《${m.song.title}》` :
                    m.msgType === 'listenTogether' ? `[发起了“一起听歌”邀请]` :
                    m.msgType === 'sticker' ? `[STICKER: 表情包]` :
-                   m.msgType === 'image' ? `[图片]` :
+                   m.msgType === 'image' ? `[图片描述: ${m.imageDescription || '一张图片'}]` :
                    cleanContextMessage(m.text))}`,
           imageUrl: m.imageUrl,
           timestamp: m.createdAt || 0
@@ -1090,10 +1092,11 @@ export function ChatScreen({
         // Take last 50
         const contextMessages = fullContext.slice(-50).map(m => ({
             role: m.role as 'user' | 'assistant',
-            content: m.content
+            content: m.content,
+            imageUrl: m.imageUrl
         }));
 
-        const { responseText: responseTextWithQuote, functionCalls } = await fetchAiResponse(
+        const { responseText: responseTextWithQuote, functionCalls, imageDescription } = await fetchAiResponse(
           promptText, 
           contextMessages, 
           currentPersona, 
@@ -1108,6 +1111,11 @@ export function ChatScreen({
           currentPersona.isOffline,
           currentImageUrl
         );
+
+        // Update user message with description if it was an image turn
+        if (msgType === 'image' && imageDescription) {
+          setMessages(prev => prev.map(m => m.id === userMsg.id ? { ...m, imageDescription } : m));
+        }
 
         if (responseTextWithQuote.includes('[NO_REPLY]')) {
           setIsTyping(false);
@@ -2427,7 +2435,7 @@ ${recentMessages}
                                   .trim();
                                 const parts = cleanText.split(/(\[STICKER:\s*[^\]]+\])/g);
 
-                                if (!cleanText && msg.msgType !== 'image' && msg.msgType !== 'sticker' && msg.msgType !== 'transfer' && msg.msgType !== 'relativeCard' && msg.msgType !== 'music' && msg.msgType !== 'listenTogether' && msg.msgType !== 'checkPhoneRequest') {
+                                if (!cleanText && !['image', 'sticker', 'transfer', 'relativeCard', 'music', 'listenTogether', 'checkPhoneRequest'].includes(msg.msgType as any)) {
                                   return null;
                                 }
 

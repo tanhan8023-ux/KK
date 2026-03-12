@@ -27,7 +27,7 @@ export function Phone({ children, onHomeClick, theme, hideHomeIndicator }: { chi
   };
 
   return (
-    <div className={`font-sans overflow-hidden bg-black ${theme.immersiveMode ? 'fixed inset-0 w-full h-full' : 'h-[100dvh] flex items-center justify-center sm:bg-neutral-900 sm:p-4'}`} style={{ scrollbarGutter: 'stable' }}>
+    <div className={`font-sans overflow-hidden bg-black ${theme.immersiveMode ? 'fixed inset-0 w-full h-full' : 'h-full flex items-center justify-center sm:bg-neutral-900 sm:p-4'}`} style={{ scrollbarGutter: 'stable' }}>
       {theme.fontUrl && (
         <style>
           {`
@@ -47,7 +47,7 @@ export function Phone({ children, onHomeClick, theme, hideHomeIndicator }: { chi
         className={`relative w-full ${
           theme.immersiveMode 
             ? 'h-full max-w-none rounded-none border-0' 
-            : 'h-[100dvh] sm:w-[393px] sm:h-[852px] sm:rounded-[50px] sm:shadow-2xl sm:border-[8px] border-neutral-800'
+            : 'h-full sm:w-[393px] sm:h-[852px] sm:rounded-[50px] sm:shadow-2xl sm:border-[8px] border-neutral-800'
         } bg-black flex flex-col shrink-0 overflow-hidden theme-font`}
       >
         

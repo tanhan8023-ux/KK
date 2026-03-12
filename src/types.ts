@@ -271,6 +271,7 @@ export interface Message {
   showInnerVoice?: boolean;
   theaterId?: string;
   hidden?: boolean;
+  imageDescription?: string;
 }
 
 export interface Comment {

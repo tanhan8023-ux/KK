@@ -712,7 +712,7 @@ export default function App() {
           generatingDiariesRef.current.add(persona.id);
           try {
             if (!aiRef.current) {
-              aiRef.current = new GoogleGenAI({ apiKey: apiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY as string });
+              aiRef.current = new GoogleGenAI({ apiKey: apiSettings.apiKey || undefined || process.env.GEMINI_API_KEY as string });
             }
             
             const entryData = await generateDiaryEntry(persona, apiSettings, worldbook, userProfile, aiRef as any);
@@ -1493,7 +1493,7 @@ export default function App() {
   };
 
   if (!isReady) {
-    return <div className="w-full h-[100dvh] bg-black flex items-center justify-center text-white">Loading...</div>;
+    return <div className="w-full h-full bg-black flex items-center justify-center text-white">Loading...</div>;
   }
 
   return (

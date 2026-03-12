@@ -13,7 +13,7 @@ export const LoveWidgetScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
   });
 
   return (
-    <div className="min-h-screen bg-pink-50 p-4">
+    <div className="h-full overflow-y-auto bg-pink-50 p-4">
       <button onClick={onBack} className="mb-4 text-pink-600 font-bold">返回</button>
       <h2 className="text-xl font-bold text-center mb-4 text-pink-800">恋爱小组件设置</h2>
       

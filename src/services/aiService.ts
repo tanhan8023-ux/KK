@@ -2,7 +2,16 @@ import React from "react";
 import { GoogleGenAI } from "@google/genai";
 import { Persona, ApiSettings, WorldbookSettings, UserProfile } from "../types";
 
-export async function generateImage(prompt: string, apiKey: string): Promise<string> {
+export async function generateImage(prompt: string, providedApiKey: string): Promise<string> {
+  let apiKey = process.env.GEMINI_API_KEY || undefined;
+  if (providedApiKey && providedApiKey.startsWith('AIza')) {
+    apiKey = providedApiKey;
+  }
+  
+  if (!apiKey) {
+    return `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(prompt)}`;
+  }
+
   const ai = new GoogleGenAI({ apiKey });
 
   try {
@@ -94,7 +103,7 @@ export async function generatePersonaStatus(
     aiRef,
     false, // enableQuote
     "", // additionalSystemInstructions
-    "gemini-3-flash-preview" // forceModel
+    undefined // forceModel
   );
   return responseText;
 }
@@ -123,7 +132,7 @@ export async function checkIfPersonaIsOffline(
     aiRef,
     false, // enableQuote
     "", // additionalSystemInstructions
-    "gemini-3-flash-preview" // forceModel
+    undefined // forceModel
   );
   
   return responseText.includes('离线');
@@ -153,7 +162,7 @@ export async function generateUserRemark(
     aiRef,
     false, // enableQuote
     "", // additionalSystemInstructions
-    "gemini-3-flash-preview" // forceModel
+    undefined // forceModel
   );
   return responseText.trim();
 }
@@ -194,7 +203,7 @@ export async function generateDiaryEntry(
     aiRef,
     false, // enableQuote
     "", // additionalSystemInstructions
-    "gemini-3-flash-preview" // forceModel
+    undefined // forceModel
   );
 
   try {
@@ -241,7 +250,7 @@ function sanitizeContent(text: string): string {
 }
 
 export async function generateMoment(persona: Persona, apiSettings: ApiSettings, worldbook: WorldbookSettings): Promise<{ content: string; imageUrl?: string }> {
-  const apiKey = apiSettings.momentsApiKey || apiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = apiSettings.momentsApiKey || apiSettings.apiKey || undefined || process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("API Key is required");
 
   const ai = new GoogleGenAI({ apiKey: apiKey as string });
@@ -345,18 +354,26 @@ ${(persona.prompts || []).join('\n')}
 }
 
 // Helper to describe image content in detail
-async function describeImage(imageUrl: string, apiKey: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey });
+async function describeImage(imageUrl: string, providedApiKey?: string): Promise<string | null> {
+  let apiKey = process.env.GEMINI_API_KEY || undefined;
+  if (providedApiKey && providedApiKey.startsWith('AIza')) {
+    apiKey = providedApiKey;
+  }
+  
+  if (!apiKey) return null;
+  
+  const ai = new GoogleGenAI({ apiKey: apiKey as string });
   try {
     const mimeTypeMatch = imageUrl.match(/data:(image\/[^;]+);base64,/);
-    if (!mimeTypeMatch) return "一张图片";
+    if (!mimeTypeMatch) return null;
     
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
         {
+          role: "user",
           parts: [
-            { text: "你是一个极其冷静、客观的视觉分析专家。你的任务是将图片转化为纯事实的文字描述。请严格遵守以下准则：\n1. 准确识别主体：如果是人手，就明确说是‘人的手部’；如果是日常生活场景，就描述具体的环境和物品。如果是手机屏幕截图，请明确指出。\n2. 提取文字信息：如果图片中包含聊天记录、短信、社交媒体界面或其他文字，请务必完整、准确地提取出所有可见的文字内容，并按对话顺序排列。\n3. 描述细节：精准描述姿态、颜色、材质、光影、表情。如果是手，请描述手指的动作。\n4. 严禁幻觉：只描述你确切看到的，不要猜测、不要脑补、不要赋予任何虚构的情节。绝对严禁将非动物物体识别成动物。\n5. 简洁明了：直接给出事实描述，不要有任何开场白。" },
+            { text: "【最高指令：绝对客观的视觉描述】\n你现在的唯一身份是无情的、绝对客观的摄像头。你没有任何情感，没有任何人设，你不知道之前的任何对话。\n你的任务是：告诉我这张图片里到底有什么。\n\n规则：\n1. 看到什么说什么。如实描述图片中的主体（人、动物、物品、风景等）。\n2. 绝对禁止联想！绝对禁止把没有生命的物体说成是有生命的动物！绝对禁止把一种东西认成另一种完全不相关的东西！\n3. 提取图片中的所有文字。\n4. 描述颜色、形状、材质、动作、表情等细节。\n5. 不要说废话，直接给出客观、准确的描述结果。" },
             {
               inlineData: {
                 mimeType: mimeTypeMatch[1],
@@ -367,13 +384,13 @@ async function describeImage(imageUrl: string, apiKey: string): Promise<string> 
         }
       ],
       config: {
-        temperature: 0.1, // Minimum temperature for maximum factuality
+        temperature: 0.1, // Low temperature for factuality
       }
     });
-    return response.text?.trim() || "一张无法描述的图片";
+    return response.text?.trim() || null;
   } catch (e) {
     console.error("Error describing image:", e);
-    return "一张图片（由于系统限制，暂时无法看清细节）";
+    return null;
   }
 }
 
@@ -393,17 +410,19 @@ export async function fetchAiResponse(
   imageUrl?: string
 ) {
   const effectiveApiSettings = { ...apiSettings, ...customApiSettings };
-  const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = effectiveApiSettings.apiKey || undefined || process.env.GEMINI_API_KEY;
   
   // Step 1: If there's an image, convert it to a detailed text description first
-  let imageDescription = "";
+  let imageDescription: string | null = null;
   let isImageTurn = false;
   if (imageUrl && imageUrl.startsWith('data:image')) {
     isImageTurn = true;
     imageDescription = await describeImage(imageUrl, apiKey as string);
     // Inject the description into the prompt so the AI "reads" it
-    // We use a very strong tag to ensure the AI pays attention
-    promptText = `【视觉感知报告 - 优先级：最高】\n注意：用户刚刚发了一张照片。以下是系统对照片内容的客观描述，请务必以此为准，严禁将其误认为动物或产生其他幻觉：\n\n"${imageDescription}"\n\n请根据这段描述，以你的人设身份做出自然的反应。`;
+    // We append it to the original promptText to preserve instructions
+    if (imageDescription) {
+      promptText = `【视觉感知报告 - 优先级：最高】\n注意：用户刚刚发了一张照片。以下是系统对照片内容的客观描述，请务必以此为准，严禁将其误认为动物或产生其他幻觉：\n\n"${imageDescription}"\n\n${promptText}`;
+    }
   }
 
   const now = new Date();
@@ -485,7 +504,7 @@ export async function fetchAiResponse(
     
     // Refine system instruction for vision
     const visionSystemInstruction = imageUrl ? 
-      "\n\n【最高优先级：视觉识别任务】\n用户刚刚发送了一张图片。你必须将其视为当前对话的唯一核心。请执行以下步骤：\n1. 仔细观察图片中的主体、细节、色彩和文字。\n2. 严禁基于之前的对话进行“脑补”或“幻觉”。\n3. 你的回复必须直接、准确地反映图片内容。\n4. 如果图片内容与你之前的认知有偏差，必须以图片为准。严禁说出与图片内容不符的胡话。" : "";
+      "\n\n【最高优先级：视觉识别任务】\n用户刚刚发送了一张图片。你必须将其视为当前对话的唯一核心。请执行以下步骤：\n1. 仔细观察图片中的主体、细节、色彩。\n2. 严禁基于之前的对话进行“脑补”或“幻觉”。\n3. 你的回复必须直接、准确地反映图片内容。绝对禁止指鹿为马，把没有生命的物体说成动物！\n4. 如果图片内容与你之前的认知有偏差，必须以图片为准。严禁说出与图片内容不符的胡话。\n5. 在回复之前，请先在内心确认：我看到的描述是否支持我即将说的话？如果描述里没提到的东西，绝对不要自己瞎编。" : "";
 
     const finalSystemInstruction = fullSystemInstruction + visionSystemInstruction;
 
@@ -493,18 +512,28 @@ export async function fetchAiResponse(
       { role: 'system', content: finalSystemInstruction },
     ];
 
-    // Add context messages (text only to avoid confusion and save tokens)
+    // Add context messages
     safeContextMessages.forEach(m => {
-      openAiMessages.push({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content
-      });
+      if (m.imageUrl && m.imageUrl.startsWith('data:image')) {
+        openAiMessages.push({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: [
+            { type: 'text', text: m.content },
+            { type: 'image_url', image_url: { url: m.imageUrl } }
+          ]
+        });
+      } else {
+        openAiMessages.push({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.content
+        });
+      }
     });
 
     // Add current prompt with image if available
-    // CRITICAL: If we are using the "description" method (isImageTurn), we DO NOT send the raw image to the persona model
-    // to avoid safety filters or vision confusion in the persona model.
-    if (!isImageTurn && imageUrl && imageUrl.startsWith('data:image')) {
+    // We send the raw image to the persona model so it can actually see it,
+    // in addition to the text description we injected above.
+    if (imageUrl && imageUrl.startsWith('data:image')) {
       openAiMessages.push({
         role: safePromptText.startsWith('[视觉感知') ? 'user' : (safePromptText.startsWith('[系统提示') ? 'system' : 'user'),
         content: [
@@ -557,7 +586,7 @@ export async function fetchAiResponse(
       const stickerPrompt = stickerMatch[1].trim();
       if (!stickerPrompt.startsWith('http') && !stickerPrompt.startsWith('data:')) {
          try {
-           const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY as string;
+           const apiKey = effectiveApiSettings.apiKey || undefined || process.env.GEMINI_API_KEY as string;
            const imageUrl = await generateImage(stickerPrompt, apiKey);
            responseText = responseText.replace(stickerMatch[0], `[STICKER: ${imageUrl}]`);
          } catch (e) {
@@ -571,7 +600,7 @@ export async function fetchAiResponse(
       const imagePrompt = imageMatch[1].trim();
       if (!imagePrompt.startsWith('http') && !imagePrompt.startsWith('data:')) {
          try {
-           const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY as string;
+           const apiKey = effectiveApiSettings.apiKey || undefined || process.env.GEMINI_API_KEY as string;
            const imageUrl = await generateImage(imagePrompt, apiKey);
            responseText = responseText.replace(imageMatch[0], `[STICKER: ${imageUrl}]`); // Reusing sticker rendering for simplicity
          } catch (e) {
@@ -580,26 +609,40 @@ export async function fetchAiResponse(
       }
     }
 
-    return { responseText: processAiResponse(responseText), functionCalls: undefined };
+    return { responseText: processAiResponse(responseText), functionCalls: undefined, imageDescription: isImageTurn ? imageDescription : undefined };
   } else {
     // For Google GenAI, we need a fresh instance if the apiKey changed
-    const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = effectiveApiSettings.apiKey || undefined || process.env.GEMINI_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey as string });
 
     // Refine system instruction for vision
     const visionSystemInstruction = imageUrl ? 
-      "\n\n【最高优先级：视觉识别任务】\n用户刚刚发送了一张图片。你必须将其视为当前对话的唯一核心。请执行以下步骤：\n1. 仔细观察图片中的主体、细节、色彩和文字。\n2. 严禁基于之前的对话进行“脑补”或“幻觉”。\n3. 你的回复必须直接、准确地反映图片内容。\n4. 如果图片内容与你之前的认知有偏差，必须以图片为准。严禁说出与图片内容不符的胡话。" : "";
+      "\n\n【最高优先级：视觉识别任务】\n用户刚刚发送了一张图片。你必须将其视为当前对话的唯一核心。请执行以下步骤：\n1. 仔细观察图片中的主体、细节、色彩。\n2. 严禁基于之前的对话进行“脑补”或“幻觉”。\n3. 你的回复必须直接、准确地反映图片内容。绝对禁止指鹿为马，把没有生命的物体说成动物！\n4. 如果图片内容与你之前的认知有偏差，必须以图片为准。严禁说出与图片内容不符的胡话。\n5. 在回复之前，请先在内心确认：我看到的描述是否支持我即将说的话？如果描述里没提到的东西，绝对不要自己瞎编。" : "";
 
     const contents = safeContextMessages.map(m => {
+      const parts: any[] = [];
+      if (m.imageUrl && m.imageUrl.startsWith('data:image')) {
+        const mimeTypeMatch = m.imageUrl.match(/data:(image\/[^;]+);base64,/);
+        if (mimeTypeMatch) {
+          parts.push({
+            inlineData: {
+              mimeType: mimeTypeMatch[1],
+              data: m.imageUrl.split(',')[1]
+            }
+          });
+        }
+      }
+      parts.push({ text: m.content });
       return {
         role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }]
+        parts: parts
       };
     });
     
     const lastParts: any[] = [];
-    // CRITICAL: If we are using the "description" method (isImageTurn), we DO NOT send the raw image to the persona model
-    if (!isImageTurn && imageUrl && imageUrl.startsWith('data:image')) {
+    // We send the raw image to the persona model so it can actually see it,
+    // in addition to the text description we injected above.
+    if (imageUrl && imageUrl.startsWith('data:image')) {
       const mimeTypeMatch = imageUrl.match(/data:(image\/[^;]+);base64,/);
       if (mimeTypeMatch) {
         lastParts.push({
@@ -631,7 +674,7 @@ export async function fetchAiResponse(
       const stickerPrompt = stickerMatch[1].trim();
       if (!stickerPrompt.startsWith('http') && !stickerPrompt.startsWith('data:')) {
          try {
-           const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY as string;
+           const apiKey = effectiveApiSettings.apiKey || undefined || process.env.GEMINI_API_KEY as string;
            const imageUrl = await generateImage(stickerPrompt, apiKey);
            responseText = responseText.replace(stickerMatch[0], `[STICKER: ${imageUrl}]`);
          } catch (e) {
@@ -645,7 +688,7 @@ export async function fetchAiResponse(
       const imagePrompt = imageMatch[1].trim();
       if (!imagePrompt.startsWith('http') && !imagePrompt.startsWith('data:')) {
          try {
-           const apiKey = effectiveApiSettings.apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY as string;
+           const apiKey = effectiveApiSettings.apiKey || undefined || process.env.GEMINI_API_KEY as string;
            const imageUrl = await generateImage(imagePrompt, apiKey);
            responseText = responseText.replace(imageMatch[0], `[STICKER: ${imageUrl}]`); // Reusing sticker rendering for simplicity
          } catch (e) {
@@ -654,7 +697,7 @@ export async function fetchAiResponse(
       }
     }
 
-    return { responseText: processAiResponse(responseText), functionCalls: response.functionCalls };
+    return { responseText: processAiResponse(responseText), functionCalls: response.functionCalls, imageDescription: isImageTurn ? imageDescription : undefined };
   }
 }
 
