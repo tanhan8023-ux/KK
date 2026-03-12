@@ -115,11 +115,19 @@ export async function checkIfPersonaIsOffline(
   userProfile: UserProfile,
   aiRef: React.MutableRefObject<GoogleGenAI | null>
 ): Promise<boolean> {
-  const prompt = `你现在是${persona.name}。请根据你的人设、当前心情和情景，判断你现在是否“在线”可以回复用户，还是“离线”不方便回复。
+  const prompt = `你现在是${persona.name}。请根据你的人设、当前心情、当前情景以及现在的时间，深度判断你现在是否“在线”（可以回复用户）还是“离线”（不方便回复）。
+
 人设设定：${persona.instructions}
 当前心情：${persona.mood || '正常'}
 当前情景：${persona.context || '正常'}
 现在的时间是：${new Date().toLocaleString('zh-CN')}
+
+判断逻辑：
+1. 如果心情极度低落、愤怒或需要独处，请倾向于“离线”。
+2. 如果情景是“睡觉”、“工作”、“学习”或“忙碌”，请倾向于“离线”。
+3. 如果心情愉悦、放松，且情景允许，请倾向于“在线”。
+4. 考虑人设的性格（例如：高冷的人可能更倾向于离线，粘人的人可能更倾向于在线）。
+
 要求：如果认为自己现在应该在线，请回复“在线”；如果认为自己现在应该离线，请回复“离线”。不要输出其他任何内容。`;
 
   const { responseText } = await fetchAiResponse(

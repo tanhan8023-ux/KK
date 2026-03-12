@@ -389,7 +389,7 @@ export interface Order {
   orderFor?: string; // 'me' or personaId
 }
 
-export type Screen = 'home' | 'chat' | 'persona' | 'api' | 'theme' | 'music' | 'xhs' | 'wallet' | 'treehole' | 'taobao' | 'fooddelivery' | 'bartender' | 'aiphones' | 'lovewidget' | 'photoalbum';
+export type Screen = 'home' | 'chat' | 'persona' | 'api' | 'theme' | 'music' | 'xhs' | 'wallet' | 'treehole' | 'taobao' | 'fooddelivery' | 'bartender' | 'aiphones' | 'lovewidget' | 'photoalbum' | 'weather' | 'calendar' | 'notes' | 'calculator' | 'camera';
 
 
 

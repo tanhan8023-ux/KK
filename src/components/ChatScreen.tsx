@@ -37,6 +37,7 @@ interface Props {
   onMusicClick?: () => void;
   xhsPrivateChats?: Record<string, { text: string, isMe: boolean, time: number }[]>;
   onAiPhoneToggle?: (isOpen: boolean) => void;
+  aiRef: React.MutableRefObject<GoogleGenAI | null>;
 }
 
 import localforage from 'localforage';
@@ -66,7 +67,8 @@ export function ChatScreen({
   onStartListeningWith,
   listeningWithPersonaId, currentSong, isPlaying, onMusicClick,
   xhsPrivateChats,
-  onAiPhoneToggle
+  onAiPhoneToggle,
+  aiRef
 }: Props) {
   const [activeTab, setActiveTab] = useState<'chat' | 'contacts' | 'moments' | 'favorites' | 'theater'>('chat');
   const [showWallet, setShowWallet] = useState(false);
@@ -361,7 +363,6 @@ export function ChatScreen({
   const [tempAvatarPendant, setTempAvatarPendant] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const aiRef = useRef<GoogleGenAI | null>(null);
   const debouncedAiResponseTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const [isVoiceChatActive, setIsVoiceChatActive] = useState(false);
@@ -1093,7 +1094,7 @@ export function ChatScreen({
         const contextMessages = fullContext.slice(-50).map(m => ({
             role: m.role as 'user' | 'assistant',
             content: m.content,
-            imageUrl: m.imageUrl
+            imageUrl: (m as any).imageUrl
         }));
 
         const { responseText: responseTextWithQuote, functionCalls, imageDescription } = await fetchAiResponse(
@@ -1524,6 +1525,17 @@ export function ChatScreen({
       setMessages(prev => prev.map(m => 
         m.id === msg.id ? { ...m, innerVoice: innerVoiceText, innerVoiceMood: mood || undefined, showInnerVoice: true } : m
       ));
+      
+      if (mood) {
+        const currentPersona = personas.find(p => p.id === currentChatId);
+        if (currentPersona) {
+          setPersonas(prev => prev.map(p => p.id === currentPersona.id ? { ...p, mood } : p));
+          
+          checkIfPersonaIsOffline(currentPersona, apiSettings, worldbook, userProfile, aiRef).then(isOffline => {
+            setPersonas(prev => prev.map(p => p.id === currentPersona.id ? { ...p, isOffline } : p));
+          });
+        }
+      }
 
     } catch (e) {
       console.error("AI inner voice error:", e);
